@@ -1,0 +1,65 @@
+[tool.ruff]
+# 行の長さ上限
+line-length = 90
+
+# Python バージョン
+target-version = "py311"
+
+# lintチェックから除外するディレクトリ
+exclude = [
+    "tests",  # テストコードはlintチェックを除外
+]
+
+[tool.ruff.format]
+# インデント: スペース使用
+indent-style = "space"
+
+# クォートスタイル: シングルクォート優先
+quote-style = "single"
+
+# 末尾カンマ: 常に追加
+skip-magic-trailing-comma = false
+
+# 改行コード: LF (Unix形式)
+line-ending = "lf"
+
+# docstringのクォートスタイル
+docstring-code-format = true
+docstring-code-line-length = 80
+
+[tool.ruff.lint]
+# 有効にするルール
+select = [
+    "E",     # pycodestyle errors
+    "W",     # pycodestyle warnings
+    "F",     # pyflakes
+    "I",     # isort (import sorting)
+    "B",     # bugbear
+    "S",     # bandit (security)
+    "PERF",  # performance
+    "UP",    # pyupgrade
+    "C90",   # mccabe (complexity)
+]
+
+# 無視するルール
+ignore = [
+    "S101",  # assert の使用を許可 (テストで必要)
+    "S104",  # 0.0.0.0 のバインドを許可 (開発環境で必要)
+    "S105",  # ハードコードされたパスワードを許可 (暫定実装)
+    "B008",  # FastAPIのDepends()を許可
+    "E501",  # 行の長さ制限を無視（ruff formatに任せる）
+]
+
+# ファイルごとの除外ルール
+[tool.ruff.lint.per-file-ignores]
+"alembic/versions/*.py" = ["E501"]  # マイグレーションファイルは長い行を許可
+"scripts/check_onion_architecture.py" = ["C90"]
+
+[tool.ruff.lint.isort]
+# インポートのソート設定
+known-first-party = ["app"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.mccabe]
+# 複雑度の上限
+max-complexity = 10

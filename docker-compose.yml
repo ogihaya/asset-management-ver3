@@ -1,0 +1,70 @@
+services:
+  backend:
+    build: ./backend
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+    ports:
+      - "8000:8000"
+    env_file: ./backend/.env
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      # ブラウザ（クライアント側）からのAPI URL
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      # サーバーサイド（Middleware）からのAPI URL
+      - SERVER_API_URL=http://backend:8000
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:15
+    container_name: postgres_container_ai_solution
+    env_file: ./backend/.env
+    ports:
+      - "5432:5432"
+    volumes:
+      # データを永続化するためのボリュームをマウント
+      - ./db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d ai_solution_db"]
+      timeout: 20s
+      retries: 10
+      interval: 5s
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_ai_solution
+    ports:
+      - "8080:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - db
+
+  migrator:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: ./backend/.env
+    volumes:
+      - ./backend:/app
+    working_dir: /app
+    command: ["alembic", "upgrade", "head"]

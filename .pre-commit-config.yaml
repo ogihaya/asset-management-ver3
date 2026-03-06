@@ -1,0 +1,14 @@
+repos:
+  - repo: local
+    hooks:
+      - id: prohibit-commits-to-main
+        name: prohibit-commits-to-main
+        language: script
+        entry: tools/prohibit-commits.sh
+        pass_filenames: false
+        fail_fast: true
+
+  - repo: https://github.com/awslabs/git-secrets
+    rev: b4a3208756632bfb87e37ba085c792863deccc74
+    hooks:
+      - id: git-secrets

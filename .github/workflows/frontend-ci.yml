@@ -1,0 +1,50 @@
+name: CI - Jest (frontend)
+
+on:
+  push:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+
+# 同じブランチで複数のワークフローが実行される際に、古いものをキャンセル
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # すべての run ステップで frontend/ をカレントに
+    defaults:
+      run:
+        working-directory: frontend
+
+    strategy:
+      matrix:
+        node-version: [22.x] # LTS & Current
+
+    steps:
+      # ソースをチェックアウト
+      - uses: actions/checkout@v4
+
+      # Node をセットアップ & npm キャッシュ
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          # frontend/ 配下にある lock ファイルを指定
+          cache-dependency-path: frontend/package-lock.json
+
+      # 依存をクリーンにインストール
+      - run: npm ci
+
+      # ビルドが通るかテスト
+      - run: npm run build
+
+      # Jest を実行（--ci で CI 向け出力）
+      - run: npm test -- --ci

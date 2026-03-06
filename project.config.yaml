@@ -1,0 +1,31 @@
+# project.config.yaml - Project Requirements & Workflow Configuration
+# Edit this file when starting a new project
+
+project:
+  name: ""
+  display_name: ""
+  description: ""
+
+workflow:
+  github_issues: false  # true: Phase 5承認後にタスクチケットをGitHub Issueとして自動作成
+  phases:
+    requirements:    { status: "not_started", completed_at: null }
+    design:          { status: "not_started", completed_at: null }
+    design_review:   { status: "not_started", completed_at: null }
+    task_tickets:    { status: "not_started", completed_at: null }
+    ticket_review:   { status: "not_started", completed_at: null }
+    implementation:  { status: "not_started", completed_at: null }
+    quality:         { status: "not_started", completed_at: null }
+    final_check:     { status: "not_started", completed_at: null }
+
+quality:
+  coverage:
+    backend_domain: 90
+    backend_application: 80
+    backend_infrastructure: 70
+    backend_presentation: 80
+    frontend_shared: 80
+    infrastructure_stack: 80
+  max_complexity:
+    cyclomatic: 10
+    cognitive: 15

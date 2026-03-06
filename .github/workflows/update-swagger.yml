@@ -1,0 +1,51 @@
+name: Update Swagger Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/app/presentation/**/*.py'
+      - 'backend/scripts/export_swagger.py'
+  workflow_dispatch:
+
+jobs:
+  update-swagger:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Export Swagger HTML
+        run: |
+          cd backend
+          python scripts/export_swagger.py
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          git diff --quiet backend/documents/api/ || echo "changes=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push if changed
+        if: steps.check_changes.outputs.changes == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add backend/documents/api/
+          git commit -m "chore: update Swagger documentation [skip ci]"
+          git pull --rebase origin main
+          git push origin main

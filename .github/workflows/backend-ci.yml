@@ -1,0 +1,301 @@
+name: Backend CI
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+concurrency:
+  group: backend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ruff-check:
+    name: Ruff Linting & Formatting
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (3.11 to match backend Dockerfile)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Ruff
+        run: pip install ruff==0.8.4
+
+      - name: Run Ruff check
+        run: ruff check .
+
+      - name: Run Ruff format check
+        run: ruff format --check .
+
+  architecture-check:
+    name: Onion Architecture Validation
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (3.11 to match backend Dockerfile)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run onion architecture dependency checker
+        run: python scripts/check_onion_architecture.py
+
+  test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+    needs: [ruff-check, architecture-check, build-check]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    # テスト用のDBコンテナを立ち上げる設定
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        # DBが立ち上がるまで待つヘルスチェック（重要）
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (3.11 to match backend Dockerfile)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generate RSA keys for JWT
+        run: |
+          openssl genrsa -out private_key.pem 2048
+          openssl rsa -in private_key.pem -pubout -out public_key.pem
+
+      - name: Run Domain Tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+          POSTGRES_PORT: 5432
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          STAGE: test
+          ENABLE_AUTH: "false"
+          JWT_EXPIRATION_HOURS: "24"
+          JWT_ALGORITHM: RS256
+        run: |
+          export JWT_PRIVATE_KEY=$(cat private_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          export JWT_PUBLIC_KEY=$(cat public_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          pytest tests/domain -v
+
+      - name: Run Application Tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+          POSTGRES_PORT: 5432
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          STAGE: test
+          ENABLE_AUTH: "false"
+          JWT_EXPIRATION_HOURS: "24"
+          JWT_ALGORITHM: RS256
+        run: |
+          export JWT_PRIVATE_KEY=$(cat private_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          export JWT_PUBLIC_KEY=$(cat public_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          pytest tests/application -v
+
+      - name: Run Integration Tests
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+          POSTGRES_PORT: 5432
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          STAGE: test
+          ENABLE_AUTH: "false"
+          JWT_EXPIRATION_HOURS: "24"
+          JWT_ALGORITHM: RS256
+        run: |
+          export JWT_PRIVATE_KEY=$(cat private_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          export JWT_PUBLIC_KEY=$(cat public_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          pytest tests/infrastructure tests/presentation -v
+
+      - name: Generate Coverage Report
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: test_db
+          POSTGRES_PORT: 5432
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/test_db
+          STAGE: test
+          ENABLE_AUTH: "false"
+          JWT_EXPIRATION_HOURS: "24"
+          JWT_ALGORITHM: RS256
+        run: |
+          export JWT_PRIVATE_KEY=$(cat private_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          export JWT_PUBLIC_KEY=$(cat public_key.pem | sed ':a;N;$!ba;s/\n/\\n/g')
+          pytest --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./backend/coverage.xml
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+  build-check:
+    name: Docker Build & Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend Docker image
+        run: |
+          echo "Building Docker image from backend/Dockerfile"
+          docker build \
+            --file backend/Dockerfile \
+            --tag backend-build-check:${{ github.sha }} \
+            backend
+          echo "✅ Docker build completed successfully"
+
+      - name: Smoke test - Container startup
+        run: |
+          set -e
+          echo "Checking container startup logs..."
+
+          # Create CI environment file with dummy values
+          cat > backend/.env.ci <<'EOF'
+          # Application
+          ENVIRONMENT=test
+
+          # Database (dummy values for build check)
+          POSTGRES_USER=test_user
+          POSTGRES_PASSWORD=test_password
+          POSTGRES_DB=test_db
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+
+          # Database URL for SQLAlchemy (dummy)
+          DATABASE_URL=postgresql+psycopg2://test_user:test_password@localhost:5432/test_db
+
+          # JWT Settings (dummy keys for build check)
+          JWT_ALGORITHM=RS256
+          JWT_EXPIRATION_HOURS=24
+          JWT_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCmznlFnpBUsejj\ns4tmb5EK5+HgWVxIFjf9PBOVzmabvCyCirgdf2s0aQW+/sBeLdrrKrrpm7gjFB1y\nw7A+myLtYt28HVfEN/5MCCktMyU55eDW5psmdk3AAku45F5QReGqfpgC/q7hVBNy\nrUTC1wYEpFFtAAVZpN3X/JjWt7DQ8EoC3EYpu0Bj1uEjaG+Qb1Ijt2+3fdt5h6OI\n1FlefGrenCds5okYclDLIcWXC8klA4B+B9S3vZF1ktPq+DYMNxBEkPQurapZZkM+\nRsEr9oIl8nE9jPkv3XLhhj+7LUCVEmhcHcLShfVWAmZSIZbPx3n6YaiiR47HjDV/\nfpCXBqZRAgMBAAECggEABg2Ivscc1Wfxy55ypORQQvEsY/3WIIsG29Zz3vwjAsxy\noIeMXAypPRkBA3/exuQa1S0DJJI5HbO/iFAzy2fJfgv4ABkf+8+s14E1zk00cPwH\nm0C5uUzycBDdQs+toPPSNyO6HCS1/5jzjjYdoETZc+5rAn2tVAYMo0doG+WFQeWh\nNlevGs4Sa/f+NJiuRCUoGROJTD69OHiJSXusxI+T979Plj/RYtWt51gk7nmGti2U\n4b8XcrSCGpi/50YXCD8F9FnuOxg8IeNaQmZjt4aFuadYJfzMCa9MttkcgVnCZcm6\nobmlWvQc6wApD4+ZqUpx7QDL4cNMmG4e4ZHQAeR/AQKBgQDjz2cijyUldzer+9ay\nZcuEFQrOId3D7w+UisBRN+NpvZxzR8zzD0fuSmk7GcZMuR6P22QI5dce9q+tUbSZ\nJAwvw4nf8gqM8BRPIGNJK/T01TjQjc6c/Xno2YB4Qb6OnWI1rrKA/ZcWSelgAPPf\nzgWI/66ssQELCigYI8z7RCBI0QKBgQC7cpc6j5nH+i5mn2FP7DnTjJgqLDh/gY91\nKWI5dHvo1S9NR+u6G7pPqXJrSRtt8p/WSybj6iAqw5UXtr8zNuEFvJwRecV4cPpr\nhluy5H1ftSBKi8SnogzyhyxmcoclF39+9tvVrOQ6XFqu6P+eIAI17u2cW7g7njQq\nGA55n2/lgQKBgB99VNFHHiheoVhpmFTSk14vlm3F6qShz/KFd24CnrHIHu8kdqUG\ncLf0mzUrK+kBEcNq3RoJw0GpccEwcRlWDUUw70cAawruSLBjVrYPmG2bZ54UbAHx\nW7+fCQ4WcGPAR4oKGuyPoSnYj6TQnOVL0iIMzbVbRjyja8VidXwp/5hxAoGAJHtJ\n6ZDXOi975mcwllCAdKbRWqvelxpNJF1Yi5wbHZaYLS9JNqB841I0PaMt3nkxGJDp\n0cPYXNpR4xqjHcGZi/dIXLJZd3Ztlo3AvRFxQTZMQZXwQTvtzyn1vz6dBOAM5VYA\nNRcAGEevMomQbmMGax7ESgEj2x6QQn0KHCumqIECgYEAuxTLShtPqpgtCdDRDwua\nSBFtMpXlfe4w24vw7FdDbIo+a8YydfLTKaUvEOyhmWBp1moYLQe2KZqGwq5gNMMN\nwgCl613TTJYsM5wRB6V2Sd0dJ01Yx7/Dui3u2KyGSlNMc2KeynG+m91iTWR/rZH4\nC038BTsG68E0uA9SRyEvK0I=\n-----END PRIVATE KEY-----\n
+          JWT_PUBLIC_KEY=-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAps55RZ6QVLHo47OLZm+R\nCufh4FlcSBY3/TwTlc5mm7wsgoq4HX9rNGkFvv7AXi3a6yq66Zu4IxQdcsOwPpsi\n7WLdvB1XxDf+TAgpLTMlOeXg1uabJnZNwAJLuOReUEXhqn6YAv6u4VQTcq1EwtcG\nBKRRbQAFWaTd1/yY1rew0PBKAtxGKbtAY9bhI2hvkG9SI7dvt33beYejiNRZXnxq\n3pwnbOaJGHJQyyHFlwvJJQOAfgfUt72RdZLT6vg2DDcQRJD0Lq2qWWZDPkbBK/aC\nJfJxPYz5L91y4YY/uy1AlRJoXB3C0oX1VgJmUiGWz8d5+mGookeOx4w1f36Qlwam\nUQIDAQAB\n-----END PUBLIC KEY-----\n
+          EOF
+
+          container_name="backend-startup-check"
+
+          # Cleanup function
+          cleanup() {
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+            rm -f backend/.env.ci
+          }
+          trap cleanup EXIT
+
+          # Start container in detached mode
+          echo "Starting container..."
+          docker run -d \
+            --name "$container_name" \
+            --env-file backend/.env.ci \
+            backend-build-check:${{ github.sha }}
+
+          # Wait for startup log (max 60 seconds)
+          echo "Waiting for application startup..."
+          for i in {1..12}; do
+            logs=$(docker logs "$container_name" 2>&1)
+
+            # Check for fatal errors first (RuntimeError, Exception, etc.)
+            if echo "$logs" | grep -qi "RuntimeError\|Exception\|Traceback"; then
+              echo "❌ Error detected in startup logs"
+              echo "--- Container logs ---"
+              echo "$logs"
+              exit 1
+            fi
+
+            # Check for successful application startup
+            if echo "$logs" | grep -q "Application startup complete"; then
+              echo "✅ Application startup complete detected"
+              echo "--- Container logs ---"
+              echo "$logs"
+              exit 0
+            fi
+
+            # Check if container is still running
+            if ! docker ps | grep -q "$container_name"; then
+              echo "❌ Container stopped unexpectedly"
+              echo "--- Container logs ---"
+              echo "$logs"
+              exit 1
+            fi
+
+            echo "Attempt $i/12: Waiting for startup..."
+            sleep 5
+          done
+
+          # After timeout, check final state
+          logs=$(docker logs "$container_name" 2>&1)
+
+          # If no errors and container is still running, consider it successful
+          if echo "$logs" | grep -qi "RuntimeError\|Exception\|Traceback"; then
+            echo "❌ Error found in final check"
+            echo "--- Container logs ---"
+            echo "$logs"
+            exit 1
+          elif docker ps | grep -q "$container_name"; then
+            echo "✅ Container is running without errors"
+            echo "--- Container logs ---"
+            echo "$logs"
+            exit 0
+          else
+            echo "❌ Container stopped or startup verification timed out"
+            echo "--- Container logs ---"
+            echo "$logs"
+            exit 1
+          fi

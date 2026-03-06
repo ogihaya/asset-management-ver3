@@ -1,0 +1,549 @@
+name: Deploy (Manual Approval)
+
+# 手動承認付きデプロイフロー
+# GitHub Environmentsの承認機能を使用
+# - developブランチ → Staging環境 (要承認)
+# - mainブランチ → Production環境 (要承認)
+#
+# デプロイ順序:
+# 1. 差分検出 (detect-changes)
+# 2. インフラデプロイ (CDK) - 承認後
+# 3. バックエンドデプロイ (ECS)
+# 4. DBマイグレーション (Alembic)
+
+on:
+  push:
+    branches:
+      - develop  # Staging環境へデプロイ (要承認)
+      - main     # Production環境へデプロイ (要承認)
+    paths:
+      - 'infra/**'
+      - 'backend/**'
+      - '.github/workflows/deploy-manual.yml'
+
+  workflow_dispatch:  # 手動実行も可能
+    inputs:
+      environment:
+        description: 'デプロイ先環境'
+        required: true
+        type: choice
+        options:
+          - stg
+          - prod
+      deploy_target:
+        description: 'デプロイ対象'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - infra-only
+          - backend-only
+      stack:
+        description: 'インフラスタック (all/foundation/data/security/backend/frontend/integration/observability)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - foundation
+          - data
+          - security
+          - backend
+          - frontend
+          - integration
+          - observability
+
+# 同時実行制御: 同じ環境への同時デプロイを防止
+concurrency:
+  group: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}-deployment-manual
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ap-northeast-1
+  NODE_VERSION_INFRA: '18'
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ========================================
+  # Job 0: 変更検出と環境判定
+  # ========================================
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      infra: ${{ steps.filter.outputs.infra }}
+      backend: ${{ steps.filter.outputs.backend }}
+      env_name: ${{ steps.set-env.outputs.env_name }}
+      env_display: ${{ steps.set-env.outputs.env_display }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set environment variables
+        id: set-env
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ENV_NAME="${{ github.event.inputs.environment }}"
+          else
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              ENV_NAME="prod"
+            else
+              ENV_NAME="stg"
+            fi
+          fi
+          echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
+          ENV_DISPLAY=$(echo "${ENV_NAME}" | tr '[:lower:]' '[:upper:]')
+          echo "env_display=${ENV_DISPLAY}" >> $GITHUB_OUTPUT
+
+      - name: Check changed files
+        uses: dorny/paths-filter@v3
+        id: filter
+        if: github.event_name == 'push'
+        with:
+          filters: |
+            infra:
+              - 'infra/**'
+              - '.github/workflows/deploy-manual.yml'
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy-manual.yml'
+
+      - name: Display deployment info
+        run: |
+          echo "================================================"
+          echo "⏸️  デプロイ承認待ち"
+          echo "================================================"
+          echo "Environment: ${{ steps.set-env.outputs.env_display }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "================================================"
+          echo ""
+          echo "⚠️  このデプロイには承認が必要です"
+
+  # ========================================
+  # Job 1: インフラデプロイ (CDK) - 承認後
+  # ========================================
+  deploy-infra:
+    name: Deploy Infrastructure (Approval Required)
+    runs-on: ubuntu-latest
+    needs: [detect-changes]
+    if: |
+      always() &&
+      (
+        (github.event_name == 'push' && needs.detect-changes.outputs.infra == 'true') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'backend-only')
+      )
+
+    # GitHub Environmentsの承認機能を使用
+    environment:
+      name: ${{ needs.detect-changes.outputs.env_name == 'prod' && 'production' || 'staging' }}
+      url: ${{ needs.detect-changes.outputs.env_name == 'prod' && 'https://your-app.com' || 'https://stg.your-app.com' }}
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      infra_deployed: ${{ steps.deploy-result.outputs.deployed }}
+      env_name: ${{ needs.detect-changes.outputs.env_name }}
+
+    steps:
+      - name: 🏗️ Infrastructure Deployment Started (Approved)
+        run: |
+          echo "================================================"
+          echo "🏗️  承認済み - インフラストラクチャを${{ needs.detect-changes.outputs.env_display }}環境にデプロイします"
+          echo "================================================"
+          echo "Environment: ${{ needs.detect-changes.outputs.env_display }}"
+          echo "Stack: ${{ github.event.inputs.stack || 'all' }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "================================================"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION_INFRA }}
+          cache: 'npm'
+          cache-dependency-path: infra/package-lock.json
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.detect-changes.outputs.env_name == 'prod' && secrets.AWS_ROLE_ARN_PROD || secrets.AWS_ROLE_ARN_STG }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        working-directory: infra
+        run: npm ci
+
+      - name: Build CDK
+        working-directory: infra
+        run: npm run build
+
+      - name: Run tests
+        working-directory: infra
+        run: npm test
+        continue-on-error: true
+
+      - name: CDK Diff
+        working-directory: infra
+        run: npx cdk diff --all --context env=${{ needs.detect-changes.outputs.env_name }}
+        continue-on-error: true
+
+      - name: Determine stacks to deploy
+        id: determine-stacks
+        run: |
+          STACK_INPUT="${{ github.event.inputs.stack || 'all' }}"
+          ENV="${{ needs.detect-changes.outputs.env_name }}"
+
+          case $STACK_INPUT in
+            all)
+              STACKS="--all"
+              ;;
+            foundation)
+              STACKS="${ENV}-FoundationStack"
+              ;;
+            data)
+              STACKS="${ENV}-DataStack"
+              ;;
+            security)
+              STACKS="${ENV}-SecurityStack"
+              ;;
+            backend)
+              STACKS="${ENV}-BackendStack"
+              ;;
+            frontend)
+              STACKS="${ENV}-FrontendStack"
+              ;;
+            integration)
+              STACKS="${ENV}-IntegrationStack"
+              ;;
+            observability)
+              STACKS="${ENV}-ObservabilityStack"
+              ;;
+            *)
+              echo "Invalid stack selection"
+              exit 1
+              ;;
+          esac
+
+          echo "stacks=$STACKS" >> $GITHUB_OUTPUT
+          echo "📦 Deploying stacks: $STACKS"
+
+      - name: Create pre-deployment snapshot
+        run: |
+          echo "Creating pre-deployment snapshot..."
+          mkdir -p deployment-info
+          echo "Timestamp: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > deployment-info/snapshot.txt
+          echo "Environment: ${{ needs.detect-changes.outputs.env_name }}" >> deployment-info/snapshot.txt
+          echo "Commit: ${{ github.sha }}" >> deployment-info/snapshot.txt
+          echo "Branch: ${{ github.ref_name }}" >> deployment-info/snapshot.txt
+          echo "Actor: ${{ github.actor }}" >> deployment-info/snapshot.txt
+          echo "Approved deployment" >> deployment-info/snapshot.txt
+
+      - name: CDK Deploy
+        id: deploy-result
+        working-directory: infra
+        run: |
+          echo "🚀 Deploying: ${{ steps.determine-stacks.outputs.stacks }}"
+
+          npx cdk deploy ${{ steps.determine-stacks.outputs.stacks }} \
+            --require-approval never \
+            --context env=${{ needs.detect-changes.outputs.env_name }} \
+            --outputs-file ./cdk-outputs-${{ needs.detect-changes.outputs.env_name }}.json
+
+          echo "deployed=true" >> $GITHUB_OUTPUT
+
+      - name: Upload CDK outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-outputs-${{ needs.detect-changes.outputs.env_name }}-approved-${{ github.sha }}
+          path: infra/cdk-outputs-${{ needs.detect-changes.outputs.env_name }}.json
+          retention-days: ${{ needs.detect-changes.outputs.env_name == 'prod' && 365 || 90 }}
+
+      - name: Create deployment summary
+        if: success()
+        run: |
+          echo "## 🎉 Infrastructure Deployment Complete (Approved)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ needs.detect-changes.outputs.env_display }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment Type:** Manual Approval" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stacks:** ${{ steps.determine-stacks.outputs.stacks }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+
+  # ========================================
+  # Job 2: バックエンドデプロイ (ECS)
+  # ========================================
+  deploy-backend:
+    name: Deploy Backend
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-infra]
+    if: |
+      always() &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true' || needs.deploy-infra.outputs.infra_deployed == 'true')) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'infra-only')
+      )
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      backend_deployed: ${{ steps.deploy-result.outputs.deployed }}
+
+    steps:
+      - name: 🚀 Backend Deployment Started
+        run: |
+          echo "================================================"
+          echo "📦 バックエンドを${{ needs.detect-changes.outputs.env_display }}環境にデプロイします"
+          echo "================================================"
+          echo "Environment: ${{ needs.detect-changes.outputs.env_display }}"
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "================================================"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.detect-changes.outputs.env_name == 'prod' && secrets.AWS_ROLE_ARN_PROD || secrets.AWS_ROLE_ARN_STG }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Get ECS cluster and service names
+        id: get-ecs-info
+        run: |
+          CLUSTER_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.detect-changes.outputs.env_name }}-BackendStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`EcsClusterName`].OutputValue' \
+            --output text)
+
+          SERVICE_NAME=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.detect-changes.outputs.env_name }}-BackendStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`EcsServiceName`].OutputValue' \
+            --output text)
+
+          ECR_REPO=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.detect-changes.outputs.env_name }}-BackendStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`BackendEcrRepositoryUri`].OutputValue' \
+            --output text)
+
+          echo "cluster_name=$CLUSTER_NAME" >> $GITHUB_OUTPUT
+          echo "service_name=$SERVICE_NAME" >> $GITHUB_OUTPUT
+          echo "ecr_repository=$ECR_REPO" >> $GITHUB_OUTPUT
+
+      - name: Build, tag, and push Docker image
+        id: build-image
+        working-directory: backend
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ECR_REPO="${{ steps.get-ecs-info.outputs.ecr_repository }}"
+
+          echo "🐳 Building Docker image..."
+          docker build -t $ECR_REPO:$IMAGE_TAG .
+
+          echo "📤 Pushing image to ECR..."
+          docker push $ECR_REPO:$IMAGE_TAG
+
+          echo "image=$ECR_REPO:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          echo "✅ Image pushed: $ECR_REPO:$IMAGE_TAG"
+
+      - name: Update ECS Service
+        id: deploy-result
+        run: |
+          echo "🚀 Deploying to ECS..."
+          aws ecs update-service \
+            --cluster ${{ steps.get-ecs-info.outputs.cluster_name }} \
+            --service ${{ steps.get-ecs-info.outputs.service_name }} \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+          echo "deployed=true" >> $GITHUB_OUTPUT
+          echo "✅ ECS service update initiated"
+
+      - name: Wait for ECS deployment
+        run: |
+          echo "⏳ Waiting for ECS service to stabilize (max 10 minutes)..."
+          timeout 600 aws ecs wait services-stable \
+            --cluster ${{ steps.get-ecs-info.outputs.cluster_name }} \
+            --services ${{ steps.get-ecs-info.outputs.service_name }} \
+            --region ${{ env.AWS_REGION }} || {
+              echo "❌ Deployment timeout or failed"
+              exit 1
+            }
+          echo "✅ ECS service is stable"
+
+      - name: Get ALB DNS for health check
+        id: get-alb
+        run: |
+          ALB_DNS=$(aws cloudformation describe-stacks \
+            --stack-name ${{ needs.detect-changes.outputs.env_name }}-BackendStack \
+            --query 'Stacks[0].Outputs[?OutputKey==`AlbDnsName`].OutputValue' \
+            --output text)
+          echo "alb_dns=$ALB_DNS" >> $GITHUB_OUTPUT
+
+      - name: Health Check
+        run: |
+          echo "🏥 Running health check..."
+          ALB_DNS="${{ steps.get-alb.outputs.alb_dns }}"
+
+          for i in {1..30}; do
+            echo "Attempt $i/30: Checking http://$ALB_DNS/health"
+
+            if curl -f -s -o /dev/null -w "%{http_code}" http://$ALB_DNS/health | grep -q "200"; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+
+            echo "⏳ Waiting 10 seconds before retry..."
+            sleep 10
+          done
+
+          echo "❌ Health check failed after 30 attempts"
+          exit 1
+
+      - name: Create deployment summary
+        if: success()
+        run: |
+          echo "## 🎉 Backend Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ needs.detect-changes.outputs.env_display }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Docker Image:** ${{ steps.build-image.outputs.image }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ECS Cluster:** ${{ steps.get-ecs-info.outputs.cluster_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ECS Service:** ${{ steps.get-ecs-info.outputs.service_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **ALB:** http://${{ steps.get-alb.outputs.alb_dns }}" >> $GITHUB_STEP_SUMMARY
+
+  # ========================================
+  # Job 3: DBマイグレーション (Alembic)
+  # ========================================
+  migrate-database:
+    name: Database Migration
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-infra, deploy-backend]
+    if: |
+      always() &&
+      (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') &&
+      (
+        (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true' || needs.deploy-infra.outputs.infra_deployed == 'true' || needs.deploy-backend.outputs.backend_deployed == 'true')) ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'infra-only')
+      )
+
+    permissions:
+      id-token: write
+      contents: read
+
+    outputs:
+      migration_executed: ${{ steps.migration-result.outputs.executed }}
+
+    steps:
+      - name: 🗄️ Database Migration Started
+        run: |
+          echo "================================================"
+          echo "🗄️  データベースマイグレーションを実行します"
+          echo "================================================"
+          echo "Environment: ${{ needs.detect-changes.outputs.env_display }}"
+          echo "================================================"
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ needs.detect-changes.outputs.env_name == 'prod' && secrets.AWS_ROLE_ARN_PROD || secrets.AWS_ROLE_ARN_STG }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Get database credentials from Secrets Manager
+        id: get-db-creds
+        run: |
+          SECRET_NAME="${{ needs.detect-changes.outputs.env_name }}-database-credentials"
+          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id $SECRET_NAME --query SecretString --output text)
+
+          DB_HOST=$(echo $SECRET_JSON | jq -r '.host')
+          DB_PORT=$(echo $SECRET_JSON | jq -r '.port')
+          DB_NAME=$(echo $SECRET_JSON | jq -r '.dbname')
+          DB_USER=$(echo $SECRET_JSON | jq -r '.username')
+          DB_PASSWORD=$(echo $SECRET_JSON | jq -r '.password')
+
+          echo "::add-mask::$DB_PASSWORD"
+          echo "db_host=$DB_HOST" >> $GITHUB_OUTPUT
+          echo "db_port=$DB_PORT" >> $GITHUB_OUTPUT
+          echo "db_name=$DB_NAME" >> $GITHUB_OUTPUT
+          echo "db_user=$DB_USER" >> $GITHUB_OUTPUT
+          echo "db_password=$DB_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          pip install --upgrade pip
+          pip install alembic psycopg2-binary
+
+      - name: Run Alembic migrations
+        id: migration-result
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg2://${{ steps.get-db-creds.outputs.db_user }}:${{ steps.get-db-creds.outputs.db_password }}@${{ steps.get-db-creds.outputs.db_host }}:${{ steps.get-db-creds.outputs.db_port }}/${{ steps.get-db-creds.outputs.db_name }}
+        run: |
+          echo "🔍 Checking current migration status..."
+          alembic current
+
+          echo "🚀 Running migrations..."
+          alembic upgrade head
+
+          echo "✅ Migration completed"
+          echo "executed=true" >> $GITHUB_OUTPUT
+
+      - name: Create migration summary
+        if: success()
+        run: |
+          echo "## 🗄️ Database Migration Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${{ needs.detect-changes.outputs.env_display }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database:** ${{ steps.get-db-creds.outputs.db_host }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
+
+  # ========================================
+  # 最終サマリー
+  # ========================================
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [detect-changes, deploy-infra, deploy-backend, migrate-database]
+    if: always()
+
+    steps:
+      - name: Create final summary
+        run: |
+          echo "## 🎉 Deployment Pipeline Complete (Manual Approval)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Job Results:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Infrastructure:** ${{ needs.deploy-infra.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backend:** ${{ needs.deploy-backend.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Database Migration:** ${{ needs.migrate-database.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment Type:** Manual Approval Required" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u +"%Y-%m-%d %H:%M:%S UTC")" >> $GITHUB_STEP_SUMMARY
