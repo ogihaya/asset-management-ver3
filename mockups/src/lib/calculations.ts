@@ -302,7 +302,9 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
 }
 
 export function buildTrendData(state: AppState, subject: string) {
-  return getSortedMonths(state).map((month) => {
+  return getSortedMonths(state)
+    .filter((month) => getRecord(state, month)?.confirmed === true)
+    .map((month) => {
     const base = { month, label: month, value: 0 };
 
     if (subject === 'total-assets') {
@@ -319,7 +321,7 @@ export function buildTrendData(state: AppState, subject: string) {
 
     const record = getRecord(state, month);
     return { ...base, value: record?.assetValues[subject] ?? 0 };
-  });
+    });
 }
 
 export function getDisplayMonthOptions(state: AppState): MonthKey[] {

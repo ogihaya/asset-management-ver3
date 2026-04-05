@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AuthenticatedShell } from '../components/layout';
 import { AllocationPieChart, AssetTrendChart } from '../components/charts';
-import { Card, InfoList, MetricCard, Pill } from '../components/ui';
+import { Card, EmptyState, InfoList, MetricCard, Pill } from '../components/ui';
 import { useAppStore } from '../app/store';
 import {
   buildTrendData,
@@ -157,7 +157,14 @@ export function DashboardPage() {
           <Pill tone='neutral'>初期表示期間: 6か月</Pill>
         </div>
         <div className='mt-6'>
-          <AssetTrendChart data={graphData} />
+          {graphData.length > 0 ? (
+            <AssetTrendChart data={graphData} />
+          ) : (
+            <EmptyState
+              title='確定済みの月次記録がまだありません'
+              description='折れ線グラフは確定済み月のみを表示します。月次記録を確定するとここに推移が表示されます。'
+            />
+          )}
         </div>
       </Card>
     </AuthenticatedShell>
