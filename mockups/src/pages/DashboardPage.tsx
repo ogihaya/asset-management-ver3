@@ -5,6 +5,7 @@ import { Card, EmptyState, InfoList, MetricCard, Pill } from '../components/ui';
 import { useAppStore } from '../app/store';
 import {
   buildTrendData,
+  getForecastSummary,
   getInvestmentComputation,
   getLatestDataMonth,
   getSettingsForMonth,
@@ -26,6 +27,7 @@ export function DashboardPage() {
   const visibleAssets = getVisibleAssets(state, analysisMonth);
   const settings = getSettingsForMonth(state, analysisMonth);
   const investment = getInvestmentComputation(state, analysisMonth);
+  const forecast = getForecastSummary(state, analysisMonth);
   const rawData = buildTrendData(state, subject);
   const graphData = useMemo(() => {
     if (range === 'all') {
@@ -44,7 +46,7 @@ export function DashboardPage() {
         <MetricCard label='総資産' value={formatCurrency(getTotalAssetsForMonth(state, analysisMonth))} note='クレジットカード引落予定を含む' />
         <MetricCard label='月次収入' value={formatCurrency(getTotalIncomeForMonth(state, analysisMonth))} note='最新入力月の明細合計' />
         <MetricCard label='推定/補正後支出' value={formatCurrency(getResolvedExpense(state, analysisMonth))} note='月次確定モーダルで確認' />
-        <MetricCard label='投資可能額' value={formatCurrency(investment.investableAmount)} note='最も近いライフイベントを基準に算出' />
+        <MetricCard label='投資可能額' value={formatCurrency(investment.investableAmount)} note='確定済み直近6か月平均の将来収支予測から算出' />
       </section>
 
       <section className='grid gap-6 xl:grid-cols-[1.05fr_0.95fr]'>
@@ -79,7 +81,27 @@ export function DashboardPage() {
 
         <Card title='投資の情報カード' description='投資可能額、配分、計算根拠をまとめて確認する領域です。'>
           <div className='grid gap-6 lg:grid-cols-[0.9fr_1.1fr]'>
-            <div className='rounded-[24px] bg-soft p-5'>
+            <div className='space-y-4 rounded-[24px] bg-soft p-5'>
+              <div className='rounded-[20px] bg-white/70 p-4'>
+                <div className='mb-3 text-sm font-semibold text-ink'>将来収支予測</div>
+                <InfoList
+                  rows={[
+                    {
+                      label: '予測月次収入',
+                      value: forecast.monthlyIncome === null ? '算出不可' : formatCurrency(forecast.monthlyIncome),
+                    },
+                    {
+                      label: '予測月次支出',
+                      value: forecast.monthlyExpense === null ? '算出不可' : formatCurrency(forecast.monthlyExpense),
+                    },
+                    { label: '平均対象月数', value: `${forecast.sampleMonths}か月` },
+                  ]}
+                />
+                <div className='mt-3 text-xs leading-5 text-ink/50'>
+                  確定済み月の直近6か月平均を使います。収入には賞与や臨時収入も含み、ライフプランイベントは通常支出と別に加算します。
+                </div>
+              </div>
+
               {investment.available ? (
                 <InfoList
                   rows={[

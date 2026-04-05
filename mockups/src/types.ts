@@ -94,6 +94,12 @@ export interface AllocationResult {
   amount: number;
 }
 
+export interface ForecastSummary {
+  monthlyIncome: number | null;
+  monthlyExpense: number | null;
+  sampleMonths: number;
+}
+
 export interface InvestmentComputation {
   available: boolean;
   reasons: string[];

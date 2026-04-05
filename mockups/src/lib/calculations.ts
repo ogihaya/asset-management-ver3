@@ -10,6 +10,7 @@ import type {
   MonthKey,
   MonthlyRecord,
   NameHistoryItem,
+  ForecastSummary,
   SettingsRevision,
   VisibilityPeriod,
 } from '../types';
@@ -40,6 +41,13 @@ function average(values: number[]): number | null {
   }
 
   return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function getForecastBaseMonths(state: AppState, month: MonthKey): MonthKey[] {
+  return getSortedMonths(state)
+    .filter((item) => compareMonths(item, month) <= 0)
+    .filter((item) => getRecord(state, item)?.confirmed === true)
+    .slice(-6);
 }
 
 export function getSortedMonths(state: AppState): MonthKey[] {
@@ -191,24 +199,22 @@ export function getLatestDataMonth(state: AppState): MonthKey {
   return lastWithAssets?.month ?? records[records.length - 1]?.month ?? state.months[0];
 }
 
-function getAverageIncome(state: AppState, month: MonthKey): number | null {
-  const history = getSortedMonths(state)
-    .filter((item) => compareMonths(item, month) <= 0)
-    .map((item) => getTotalIncomeForMonth(state, item))
-    .filter((value) => value > 0)
-    .slice(-3);
+export function getForecastSummary(state: AppState, month: MonthKey): ForecastSummary {
+  const baseMonths = getForecastBaseMonths(state, month);
+  const incomeHistory = baseMonths.map(function (item) {
+    return getTotalIncomeForMonth(state, item);
+  });
+  const expenseHistory = baseMonths
+    .map(function (item) {
+      return getResolvedExpense(state, item);
+    })
+    .filter((value): value is number => value !== null);
 
-  return average(history);
-}
-
-function getAverageExpense(state: AppState, month: MonthKey): number | null {
-  const history = getSortedMonths(state)
-    .filter((item) => compareMonths(item, month) <= 0)
-    .map((item) => getResolvedExpense(state, item))
-    .filter((value): value is number => value !== null)
-    .slice(-3);
-
-  return average(history);
+  return {
+    monthlyIncome: average(incomeHistory),
+    monthlyExpense: average(expenseHistory),
+    sampleMonths: baseMonths.length,
+  };
 }
 
 function allocate(investableAmount: number, targets: InvestmentTarget[]): AllocationResult[] {
@@ -236,6 +242,7 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
   const reasons: string[] = [];
   const settings = getSettingsForMonth(state, month);
   const targets = settings.targets;
+  const forecast = getForecastSummary(state, month);
   const upcomingPlans = [...state.lifePlans]
     .filter((plan) => compareMonths(plan.month, month) >= 0)
     .sort((left, right) => compareMonths(left.month, right.month));
@@ -254,15 +261,15 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
     reasons.push('投資先配分の合計比率が100%ではありません。');
   }
 
-  const monthlyIncome = getTotalIncomeForMonth(state, month) || getAverageIncome(state, month);
-  const monthlyExpense = getResolvedExpense(state, month) ?? getAverageExpense(state, month);
+  const monthlyIncome = forecast.monthlyIncome;
+  const monthlyExpense = forecast.monthlyExpense;
 
   if (monthlyIncome === null) {
-    reasons.push('収入データが不足しています。');
+    reasons.push('確定済み月の収入実績がないため将来収入を予測できません。');
   }
 
   if (monthlyExpense === null) {
-    reasons.push('支出データが不足しています。');
+    reasons.push('確定済み月の支出実績がないため将来支出を予測できません。');
   }
 
   if (reasons.length > 0 || !targetEvent || monthlyIncome === null || monthlyExpense === null) {

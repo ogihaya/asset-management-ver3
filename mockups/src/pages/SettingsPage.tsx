@@ -2,7 +2,7 @@ import { Pencil, Plus } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { AuthenticatedShell } from '../components/layout';
 import { useAppStore } from '../app/store';
-import { getNextSettingsEffectiveMonth, getSettingsForMonth } from '../lib/calculations';
+import { getForecastSummary, getNextSettingsEffectiveMonth, getSettingsForMonth } from '../lib/calculations';
 import { formatMonthLabel } from '../lib/months';
 import { formatCurrency, formatPercent, toNumber, uid } from '../lib/utils';
 import { Button, Card, ConfirmDialog, Field, InfoList, Modal, Pill, TextInput } from '../components/ui';
@@ -18,6 +18,7 @@ export function SettingsPage() {
   const { state, saveEmergencyFund, saveInvestmentTargets } = useAppStore();
   const effectiveFrom = getNextSettingsEffectiveMonth(state) || state.months[state.months.length - 1];
   const settings = getSettingsForMonth(state, effectiveFrom);
+  const forecast = getForecastSummary(state, effectiveFrom);
   const [emergencyDraft, setEmergencyDraft] = useState(String(settings.emergencyFund));
   const [targetsDraft, setTargetsDraft] = useState<InvestmentTarget[]>(settings.targets);
   const [targetModalOpen, setTargetModalOpen] = useState(false);
@@ -62,7 +63,7 @@ export function SettingsPage() {
   return (
     <AuthenticatedShell
       title='設定'
-      subtitle='生活防衛資金と投資先配分を管理します。変更は次の未確定月から反映されます。'
+      subtitle='生活防衛資金と投資先配分を管理し、投資計算に使う将来収支予測の前提を確認します。変更は次の未確定月から反映されます。'
       actions={<Pill tone='success'>適用開始月: {formatMonthLabel(effectiveFrom)}</Pill>}
     >
       <section className='grid gap-6 xl:grid-cols-[0.95fr_1.05fr]'>
@@ -119,6 +120,44 @@ export function SettingsPage() {
           </div>
         </Card>
       </section>
+
+      <Card
+        title='将来収支予測'
+        description='投資計算では、確定済み月の直近6か月平均から将来の月次収入と月次支出を自動予測します。'
+      >
+        <div className='grid gap-6 lg:grid-cols-[0.9fr_1.1fr]'>
+          <div className='rounded-[24px] bg-soft p-5'>
+            <InfoList
+              rows={[
+                {
+                  label: '予測月次収入',
+                  value: forecast.monthlyIncome === null ? '算出不可' : formatCurrency(forecast.monthlyIncome),
+                  emphasize: true,
+                },
+                {
+                  label: '予測月次支出',
+                  value: forecast.monthlyExpense === null ? '算出不可' : formatCurrency(forecast.monthlyExpense),
+                  emphasize: true,
+                },
+                { label: '計算対象月数', value: `${forecast.sampleMonths}か月` },
+                { label: '予測方式', value: '確定済み直近6か月平均' },
+              ]}
+            />
+          </div>
+          <div className='rounded-[24px] bg-cloud/55 p-5 text-sm leading-7 text-ink/65'>
+            <div className='font-semibold text-ink'>予測ルール</div>
+            <div className='mt-3'>
+              収入予測は、確定済み月の収入実績を直近6か月分まで平均して算出します。賞与や臨時収入も通常収入として平均に含みます。
+            </div>
+            <div className='mt-3'>
+              支出予測は、確定済み月の支出実績を直近6か月分まで平均して算出します。将来の大きな支出はライフプランイベントとして別に累積支出へ加算します。
+            </div>
+            <div className='mt-3'>
+              確定済み月が6か月未満の場合は、存在する確定済み月だけで平均します。将来予測の手動入力や補正は行いません。
+            </div>
+          </div>
+        </div>
+      </Card>
 
       <Modal
         open={targetModalOpen}
