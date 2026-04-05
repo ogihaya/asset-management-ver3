@@ -150,9 +150,6 @@ export function MonthlyRecordPage() {
     <AuthenticatedShell
       title='月次記録'
       subtitle='資産、収入、当月投資額を入力し、支出推定を確認してから月次を確定します。確定後は編集できません。'
-      actions={
-        record.confirmed ? <Pill tone='success'>確定済み</Pill> : <Pill tone='warning'>未確定</Pill>
-      }
       stickyBottomAction={
         <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -177,6 +174,9 @@ export function MonthlyRecordPage() {
       ) : null}
 
       <Card title='表示対象月' description='古い未確定月から順番に確定する必要があります。'>
+        <div className='mb-4 flex justify-center'>
+          {record.confirmed ? <Pill tone='success'>確定済み</Pill> : <Pill tone='warning'>未確定</Pill>}
+        </div>
         <div className='flex flex-wrap items-center justify-center gap-3'>
           <Button disabled={prevMonth === null} onClick={() => prevMonth && setSelectedMonth(prevMonth)} type='button' variant='secondary'>
             前月
