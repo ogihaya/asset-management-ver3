@@ -151,9 +151,20 @@ export function MonthlyRecordPage() {
       title='月次記録'
       subtitle='資産、収入、当月投資額を入力し、支出推定を確認してから月次を確定します。確定後は編集できません。'
       actions={
-        <div className='flex items-center gap-3'>
-          {record.confirmed ? <Pill tone='success'>確定済み</Pill> : <Pill tone='warning'>未確定</Pill>}
-          <Button disabled={confirmability.canConfirm === false} onClick={openConfirmModal} type='button'>
+        record.confirmed ? <Pill tone='success'>確定済み</Pill> : <Pill tone='warning'>未確定</Pill>
+      }
+      stickyBottomAction={
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <div>
+            <div className='text-xs font-semibold uppercase tracking-[0.18em] text-ink/35'>Monthly Close</div>
+            <div className='mt-1 text-sm font-semibold text-ink'>{formatMonthLabel(selectedMonth)} の記録を確定</div>
+            {confirmability.canConfirm === false ? (
+              <div className='mt-1 text-xs text-amber'>{confirmability.reason}</div>
+            ) : (
+              <div className='mt-1 text-xs text-ink/50'>支出推定を確認し、必要なら補正してから確定します。</div>
+            )}
+          </div>
+          <Button className='w-full sm:w-auto' disabled={confirmability.canConfirm === false} onClick={openConfirmModal} type='button'>
             月次確定
           </Button>
         </div>

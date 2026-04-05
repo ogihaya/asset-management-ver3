@@ -72,11 +72,18 @@ export function LifePlanPage() {
     <AuthenticatedShell
       title='ライフプラン'
       subtitle='将来のイベントを年月、内容、金額、メモ単位で管理します。同じ年月に複数イベントを登録できます。'
-      actions={
-        <Button type='button' onClick={openCreate}>
-          <Plus size={16} />
-          ライフプランを追加
-        </Button>
+      stickyBottomAction={
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <div>
+            <div className='text-xs font-semibold uppercase tracking-[0.18em] text-ink/35'>Life Plan</div>
+            <div className='mt-1 text-sm font-semibold text-ink'>将来イベントを追加して投資計算に反映</div>
+            <div className='mt-1 text-xs text-ink/50'>年月、内容、金額、メモを1件ずつ登録します。</div>
+          </div>
+          <Button className='w-full sm:w-auto' type='button' onClick={openCreate}>
+            <Plus size={16} />
+            ライフプランを追加
+          </Button>
+        </div>
       }
     >
       <Card title='イベント一覧' description='投資計算では、この一覧のイベントを将来支出として参照します。'>
