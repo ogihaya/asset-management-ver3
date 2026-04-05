@@ -1,5 +1,6 @@
 import { X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useEffect } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
 import type { ToastMessage } from '../types';
 import { cn, formatCurrency } from '../lib/utils';
@@ -222,27 +223,7 @@ export function ToastViewport({ toasts, onDismiss }: { toasts: ToastMessage[]; o
 
   return createPortal(
     <div className='pointer-events-none fixed right-4 top-4 z-[60] flex w-[min(92vw,360px)] flex-col gap-3'>
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={cn(
-            'pointer-events-auto rounded-3xl border px-4 py-4 shadow-float',
-            toast.tone === 'success' && 'border-pine/20 bg-white',
-            toast.tone === 'warning' && 'border-amber/25 bg-white',
-            toast.tone === 'info' && 'border-ink/10 bg-white',
-          )}
-        >
-          <div className='flex items-start justify-between gap-3'>
-            <div>
-              <div className='text-sm font-semibold text-ink'>{toast.title}</div>
-              {toast.description ? <div className='mt-1 text-xs text-ink/55'>{toast.description}</div> : null}
-            </div>
-            <button className='rounded-full p-1 text-ink/50' onClick={() => onDismiss(toast.id)} type='button'>
-              <X size={14} />
-            </button>
-          </div>
-        </div>
-      ))}
+      {toasts.map((toast) => <ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />)}
     </div>,
     document.body,
   );
@@ -250,4 +231,40 @@ export function ToastViewport({ toasts, onDismiss }: { toasts: ToastMessage[]; o
 
 export function CurrencyHint({ value }: { value: number | null }) {
   return <span className='text-xs text-ink/45'>{formatCurrency(value)}</span>;
+}
+
+function ToastItem({ toast, onDismiss }: { toast: ToastMessage; onDismiss: (id: string) => void }) {
+  useEffect(
+    function () {
+      const timer = window.setTimeout(function () {
+        onDismiss(toast.id);
+      }, 4000);
+
+      return function () {
+        window.clearTimeout(timer);
+      };
+    },
+    [onDismiss, toast.id],
+  );
+
+  return (
+    <div
+      className={cn(
+        'pointer-events-auto rounded-3xl border px-4 py-4 shadow-float',
+        toast.tone === 'success' && 'border-pine/20 bg-white',
+        toast.tone === 'warning' && 'border-amber/25 bg-white',
+        toast.tone === 'info' && 'border-ink/10 bg-white',
+      )}
+    >
+      <div className='flex items-start justify-between gap-3'>
+        <div>
+          <div className='text-sm font-semibold text-ink'>{toast.title}</div>
+          {toast.description ? <div className='mt-1 text-xs text-ink/55'>{toast.description}</div> : null}
+        </div>
+        <button className='rounded-full p-1 text-ink/50' onClick={() => onDismiss(toast.id)} type='button'>
+          <X size={14} />
+        </button>
+      </div>
+    </div>
+  );
 }
