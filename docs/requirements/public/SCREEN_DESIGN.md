@@ -1,7 +1,7 @@
 # 画面設計書
 
 本書は、資産管理アプリの画面構成、表示要素、主要操作、レスポンシブ方針を定義する。  
-内容は `OVERVIEW.md`、`REQUIREMENTS.md`、`SCREEN_DESIGN_DRAFT.md`、および現行 mockup 実装をもとに整理している。  
+内容は `OVERVIEW.md`、`REQUIREMENTS.md`、および現行 mockup 実装をもとに整理している。  
 なお、認証補助画面のURLは、画面設計書上の仮固定値として `/signup`、`/password-reset/request`、`/password-reset/reset` を採用している。
 
 ## 1. 画面一覧
