@@ -362,33 +362,13 @@ export function DashboardPage() {
         </Card>
       </section>
 
-      <Card title='将来収支と投資判断カード' description='将来収支予測と、採用されたライフイベントを基準にした投資判断を確認する領域です。'>
+      <Card title='将来収支と投資判断カード' description='投資判断を主表示とし、将来収支予測はその判断材料として補助表示する領域です。'>
         {analysisMonth && investment && forecast ? (
-          <div className='grid gap-6 lg:grid-cols-[0.95fr_1.05fr]'>
-            <div className='rounded-[24px] bg-soft p-5'>
-              <div className='mb-3 text-sm font-semibold text-ink'>将来収支予測</div>
-              <InfoList
-                rows={[
-                  {
-                    label: '予測月次収入',
-                    value: forecast.monthlyIncome === null ? '算出不可' : formatCurrency(forecast.monthlyIncome),
-                  },
-                  {
-                    label: '予測月次支出',
-                    value: forecast.monthlyExpense === null ? '算出不可' : formatCurrency(forecast.monthlyExpense),
-                  },
-                  { label: '平均対象月数', value: `${forecast.sampleMonths}か月` },
-                ]}
-              />
-              <div className='mt-3 text-xs leading-5 text-ink/50'>
-                確定済み月の直近6か月平均を使います。収入には賞与や臨時収入も含み、ライフプランイベントは通常支出と別に加算します。
-              </div>
-            </div>
-
+          <div className='space-y-6'>
             <div className='rounded-[24px] bg-cloud/60 p-5'>
-                      {investment.available ? (
-                        <>
-                          <div className='mb-3 text-sm font-semibold text-ink'>投資判断</div>
+              {investment.available ? (
+                <>
+                  <div className='mb-3 text-sm font-semibold text-ink'>投資判断</div>
                   <InfoList
                     rows={[
                       { label: '投資可能額', value: formatCurrency(investment.investableAmount), emphasize: true },
@@ -423,6 +403,47 @@ export function DashboardPage() {
                           <div className='mt-3 text-xs text-ink/50'>現在評価額 {formatCurrency(allocation.currentValuation)}</div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className='mt-5 rounded-[24px] bg-white/75 p-4'>
+                    <div className='text-sm font-semibold text-ink'>配分結果</div>
+                    <div className='mt-3 space-y-3'>
+                      {investment.allocations.map((allocation) => (
+                        <div key={allocation.targetId} className='rounded-[20px] bg-cloud/45 px-4 py-4 text-sm'>
+                          <div className='flex items-start justify-between gap-4'>
+                            <div>
+                              <div className='font-medium text-ink'>{allocation.targetName}</div>
+                              <div className='mt-1 text-xs text-ink/45'>理想比率 {formatPercent(allocation.ratio)}</div>
+                            </div>
+                            <div className='text-right'>
+                              <div className='text-xs text-ink/45'>今回の配分額</div>
+                              <div className='mt-1 font-semibold text-ink'>{allocation.amount === 0 ? '0円（今回は見送り）' : formatCurrency(allocation.amount)}</div>
+                            </div>
+                          </div>
+                          <div className='mt-3 text-xs text-ink/50'>現在評価額 {formatCurrency(allocation.currentValuation)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className='mt-5 rounded-[24px] bg-soft p-5'>
+                    <div className='mb-3 text-sm font-semibold text-ink'>将来収支予測</div>
+                    <InfoList
+                      rows={[
+                        {
+                          label: '予測月次収入',
+                          value: forecast.monthlyIncome === null ? '算出不可' : formatCurrency(forecast.monthlyIncome),
+                        },
+                        {
+                          label: '予測月次支出',
+                          value: forecast.monthlyExpense === null ? '算出不可' : formatCurrency(forecast.monthlyExpense),
+                        },
+                        { label: '平均対象月数', value: `${forecast.sampleMonths}か月` },
+                      ]}
+                    />
+                    <div className='mt-3 text-xs leading-5 text-ink/50'>
+                      確定済み月の直近6か月平均を使います。収入には賞与や臨時収入も含み、ライフプランイベントは通常支出と別に加算します。
                     </div>
                   </div>
                 </>

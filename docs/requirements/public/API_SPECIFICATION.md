@@ -299,6 +299,7 @@
 - **補足**:
   - `asset_summary.regular_assets_total_yen` は通常資産合計を表し、`kpis.total_assets_yen` は通常資産合計と投資評価額合計の合算値を表す。
   - `investment_decision.allocations` は、最新確定月の投資評価額を基準に、投資後の理想評価額へ不足分を寄せるリバランス方向の配分結果を返す。
+  - `investment_decision` は投資判断の主表示と、その判断材料である将来収支予測を同一カード内で構成する前提で返す。
 - **レスポンス例** (`200`):
 ```json
 {
