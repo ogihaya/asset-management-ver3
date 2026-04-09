@@ -145,6 +145,27 @@ export function getTotalInvestmentValuationForMonth(state: AppState, month: Mont
   }, 0);
 }
 
+export function getInvestmentCompositionForMonth(state: AppState, month: MonthKey) {
+  const targets = getTargetValuationsForMonth(state, month);
+  const totalValue = targets.reduce(function (sum, target) {
+    return sum + (target.value ?? 0);
+  }, 0);
+
+  return {
+    totalValue,
+    items: targets.map(function (target) {
+      const actualRatio = totalValue > 0 && target.value !== null ? Number((((target.value ?? 0) / totalValue) * 100).toFixed(2)) : null;
+      const deltaRatio = actualRatio === null ? null : Number((actualRatio - target.ratio).toFixed(2));
+
+      return {
+        ...target,
+        actualRatio,
+        deltaRatio,
+      };
+    }),
+  };
+}
+
 export function getTotalAssetsForMonth(state: AppState, month: MonthKey): number {
   return (
     getVisibleAssets(state, month).reduce((sum, asset) => sum + (asset.value ?? 0), 0) +
