@@ -220,8 +220,22 @@ export function MonthlyRecordPage() {
           <Button disabled={prevMonth === null} onClick={() => prevMonth && setSelectedMonth(prevMonth)} type='button' variant='secondary'>
             前月
           </Button>
-          <div className='min-w-44 rounded-full bg-ink px-5 py-3 text-center text-sm font-semibold text-white'>
-            {formatMonthLabel(selectedMonth)}
+          <div className='min-w-56 rounded-full bg-ink px-4 py-2 text-white'>
+            <select
+              aria-label='表示対象月'
+              className='w-full bg-transparent text-center text-sm font-semibold text-white outline-none'
+              onChange={(event) => setSelectedMonth(event.target.value as MonthKey)}
+              value={selectedMonth}
+            >
+              {state.months.map((month) => {
+                const itemRecord = state.monthlyRecords.find((item) => item.month === month);
+                return (
+                  <option key={month} value={month} className='text-ink'>
+                    {formatMonthLabel(month)}{itemRecord?.confirmed ? '（確定済み）' : '（未確定）'}
+                  </option>
+                );
+              })}
+            </select>
           </div>
           <Button disabled={nextMonth === null} onClick={() => nextMonth && setSelectedMonth(nextMonth)} type='button' variant='secondary'>
             翌月
