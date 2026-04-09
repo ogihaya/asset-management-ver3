@@ -147,6 +147,7 @@ export function Modal({
   description,
   children,
   footer,
+  className,
 }: {
   open: boolean;
   onClose: () => void;
@@ -154,6 +155,7 @@ export function Modal({
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  className?: string;
 }) {
   if (!open || typeof document === 'undefined') {
     return null;
@@ -161,7 +163,7 @@ export function Modal({
 
   return createPortal(
     <div className='fixed inset-0 z-50 flex items-center justify-center bg-ink/45 p-4 backdrop-blur-sm'>
-      <div className='w-full max-w-lg rounded-[28px] bg-white p-6 shadow-float'>
+      <div className={cn('w-full max-w-lg rounded-[28px] bg-white p-6 shadow-float', className)}>
         <div className='mb-4 flex items-start justify-between gap-4'>
           <div>
             <h3 className='text-xl font-semibold text-ink'>{title}</h3>
