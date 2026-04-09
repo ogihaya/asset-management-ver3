@@ -91,6 +91,7 @@ export interface AllocationResult {
   targetId: string;
   targetName: string;
   ratio: number;
+  currentValuation: number;
   amount: number;
 }
 

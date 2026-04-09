@@ -291,25 +291,91 @@ export function getForecastSummary(state: AppState, month: MonthKey): ForecastSu
   };
 }
 
-function allocate(investableAmount: number, targets: InvestmentTarget[]): AllocationResult[] {
-  const raw = targets.map((target) => ({
-    ...target,
-    amount: Math.floor((investableAmount * target.ratio) / 100),
-  }));
-  const allocated = raw.reduce((sum, item) => sum + item.amount, 0);
-  const remainder = investableAmount - allocated;
+function allocate(state: AppState, investableAmount: number, targets: InvestmentTarget[]): AllocationResult[] {
+  const latestConfirmedMonth = getLatestConfirmedMonth(state);
+  const latestConfirmedRecord = latestConfirmedMonth ? getRecord(state, latestConfirmedMonth) : null;
+  const currentTargets = targets.map(function (target, index) {
+    return {
+      ...target,
+      index,
+      currentValuation: latestConfirmedRecord?.investmentValuations[target.id] ?? 0,
+    };
+  });
 
-  if (remainder > 0 && raw.length > 0) {
-    const highest = [...raw].sort((left, right) => right.ratio - left.ratio)[0];
-    highest.amount += remainder;
+  if (investableAmount <= 0) {
+    return currentTargets.map(function (target) {
+      return {
+        targetId: target.id,
+        targetName: target.name,
+        ratio: target.ratio,
+        currentValuation: target.currentValuation,
+        amount: 0,
+      };
+    });
   }
 
-  return raw.map((item) => ({
-    targetId: item.id,
-    targetName: item.name,
-    ratio: item.ratio,
-    amount: item.amount,
-  }));
+  const currentTotal = currentTargets.reduce(function (sum, target) {
+    return sum + target.currentValuation;
+  }, 0);
+  const postTotal = currentTotal + investableAmount;
+  const rawTargets = currentTargets.map(function (target) {
+    const idealPostValue = (postTotal * target.ratio) / 100;
+    const shortfall = Math.max(0, idealPostValue - target.currentValuation);
+
+    return {
+      ...target,
+      shortfall,
+      amount: 0,
+    };
+  });
+  const totalShortfall = rawTargets.reduce(function (sum, target) {
+    return sum + target.shortfall;
+  }, 0);
+
+  if (totalShortfall <= 0) {
+    return rawTargets.map(function (target) {
+      return {
+        targetId: target.id,
+        targetName: target.name,
+        ratio: target.ratio,
+        currentValuation: target.currentValuation,
+        amount: 0,
+      };
+    });
+  }
+
+  const allocatedTargets = rawTargets.map(function (target) {
+    return {
+      ...target,
+      amount: Math.floor((investableAmount * target.shortfall) / totalShortfall),
+    };
+  });
+  let remainder = investableAmount - allocatedTargets.reduce(function (sum, target) {
+    return sum + target.amount;
+  }, 0);
+  const remainderOrder = [...allocatedTargets].sort(function (left, right) {
+    if (left.shortfall !== right.shortfall) {
+      return right.shortfall - left.shortfall;
+    }
+
+    return left.index - right.index;
+  });
+
+  while (remainder > 0 && remainderOrder.length > 0) {
+    const target = remainderOrder[(investableAmount - remainder) % remainderOrder.length];
+    target.amount += 1;
+    remainder -= 1;
+  }
+
+  return allocatedTargets.map(function (target) {
+    return {
+      targetId: target.id,
+      targetName: target.name,
+      ratio: target.ratio,
+      currentValuation: target.currentValuation,
+      amount: target.amount,
+    };
+  });
 }
 
 export function getInvestmentComputation(state: AppState, month: MonthKey): InvestmentComputation {
@@ -403,7 +469,7 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
     surplusAssets: selected.surplusAssets,
     emergencyFund: settings.emergencyFund,
     investableAmount: selected.investableAmount,
-    allocations: allocate(selected.investableAmount, targets),
+    allocations: allocate(state, selected.investableAmount, targets),
   };
 }
 
