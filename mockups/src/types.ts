@@ -51,7 +51,7 @@ export interface MonthlyRecord {
   expenseOverride: number | null;
   assetValues: Record<string, Money>;
   incomeValues: Record<string, Money>;
-  investmentAmounts: Record<string, Money>;
+  investmentValuations: Record<string, Money>;
 }
 
 export interface UserProfile {

@@ -35,7 +35,7 @@ export function MonthlyRecordPage() {
     restoreAsset,
     updateAssetValue,
     updateIncomeValue,
-    updateInvestmentAmount,
+    updateInvestmentValuation,
   } = useAppStore();
 
   const initialMonth = getFirstUnconfirmedMonth(state) || state.months[0];
@@ -149,7 +149,7 @@ export function MonthlyRecordPage() {
   return (
     <AuthenticatedShell
       title='月次記録'
-      subtitle='資産、収入、当月投資額を入力し、支出推定を確認してから月次を確定します。確定後は編集できません。'
+      subtitle='資産、収入、投資評価額を入力し、支出推定を確認してから月次を確定します。確定後は編集できません。'
       stickyBottomAction={
         <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -269,7 +269,7 @@ export function MonthlyRecordPage() {
             </div>
           </Card>
 
-          <Card title='投資入力カード' description='投資先の定義変更は設定画面で行い、ここでは当月金額のみ入力します。'>
+          <Card title='投資入力カード' description='投資先の定義変更は設定画面で行い、ここではその月の評価額のみ入力します。'>
             <div className='space-y-3'>
               {targets.map((target) => (
                 <div key={target.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px] md:items-center'>
@@ -280,9 +280,9 @@ export function MonthlyRecordPage() {
                   <TextInput
                     disabled={record.confirmed}
                     inputMode='numeric'
-                    placeholder='当月投資額'
-                    value={record.investmentAmounts[target.id] === null || record.investmentAmounts[target.id] === undefined ? '' : String(record.investmentAmounts[target.id])}
-                    onChange={(event) => updateInvestmentAmount(selectedMonth, target.id, toNumber(event.target.value))}
+                    placeholder='評価額'
+                    value={record.investmentValuations[target.id] === null || record.investmentValuations[target.id] === undefined ? '' : String(record.investmentValuations[target.id])}
+                    onChange={(event) => updateInvestmentValuation(selectedMonth, target.id, toNumber(event.target.value))}
                   />
                 </div>
               ))}

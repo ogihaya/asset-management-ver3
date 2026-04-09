@@ -18,7 +18,7 @@ function createRecord(month: MonthKey): MonthlyRecord {
     expenseOverride: null,
     assetValues: {},
     incomeValues: {},
-    investmentAmounts: {},
+    investmentValuations: {},
   };
 }
 
@@ -62,9 +62,6 @@ export function createSeedState(reference = new Date()): AppState {
     asset('asset-bank', '住信SBIネット銀行 普通預金', firstMonth),
     asset('asset-paypay', 'PayPay残高', firstMonth),
     asset('asset-card', '楽天カード 引落予定', firstMonth),
-    asset('asset-nisa', '新NISA オルカン', firstMonth),
-    asset('asset-taxable', '特定口座 S&P500', firstMonth),
-    asset('asset-legacy', '旧つみたて口座', firstMonth, months[2]),
   ];
 
   const incomes: IncomeDefinition[] = [
@@ -100,9 +97,6 @@ export function createSeedState(reference = new Date()): AppState {
     'asset-bank': [820_000, 845_000, 870_000, 910_000, 960_000, 1_020_000, null],
     'asset-paypay': [12_000, 18_000, 15_000, 22_000, 17_000, 19_000, null],
     'asset-card': [-120_000, -140_000, -110_000, -130_000, -125_000, -98_000, null],
-    'asset-nisa': [420_000, 480_000, 530_000, 580_000, 660_000, 720_000, null],
-    'asset-taxable': [160_000, 190_000, 210_000, 250_000, 285_000, 330_000, null],
-    'asset-legacy': [90_000, 105_000, 120_000, null, null, null, null],
   };
 
   const incomeSeries: Record<string, Array<number | null>> = {
@@ -111,9 +105,9 @@ export function createSeedState(reference = new Date()): AppState {
   };
 
   const investmentSeries: Record<string, Array<number | null>> = {
-    'target-world': [40_000, 42_000, 45_000, 47_000, 50_000, 52_000, null],
-    'target-sp500': [24_000, 25_000, 27_000, 28_000, 30_000, 31_000, null],
-    'target-bonds': [16_000, 17_000, 18_000, 18_000, 20_000, 21_000, null],
+    'target-world': [420_000, 480_000, 530_000, 580_000, 660_000, 720_000, null],
+    'target-sp500': [160_000, 190_000, 210_000, 250_000, 285_000, 330_000, null],
+    'target-bonds': [90_000, 105_000, 120_000, 132_000, 145_000, 158_000, null],
   };
 
   const monthlyRecords = months.map((month, index) => {
@@ -130,7 +124,7 @@ export function createSeedState(reference = new Date()): AppState {
     });
 
     Object.entries(investmentSeries).forEach(([targetId, series]) => {
-      record.investmentAmounts[targetId] = series[index] ?? null;
+      record.investmentValuations[targetId] = series[index] ?? null;
     });
 
     if (month === months[1]) {

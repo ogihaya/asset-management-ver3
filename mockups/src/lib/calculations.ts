@@ -31,10 +31,6 @@ function isVisible(periods: VisibilityPeriod[], month: MonthKey): boolean {
   return periods.some((period) => isMonthVisible(month, period.from, period.to));
 }
 
-function sumValues(values: Record<string, number | null>): number {
-  return Object.values(values).reduce<number>((sum, value) => sum + (value ?? 0), 0);
-}
-
 function average(values: number[]): number | null {
   if (values.length === 0) {
     return null;
@@ -131,17 +127,33 @@ export function getTargetsForMonth(state: AppState, month: MonthKey): Investment
   return getSettingsForMonth(state, month).targets;
 }
 
+export function getTargetValuationsForMonth(state: AppState, month: MonthKey) {
+  const record = getRecord(state, month);
+  return getTargetsForMonth(state, month).map(function (target) {
+    return {
+      id: target.id,
+      name: target.name,
+      ratio: target.ratio,
+      value: record?.investmentValuations[target.id] ?? null,
+    };
+  });
+}
+
+export function getTotalInvestmentValuationForMonth(state: AppState, month: MonthKey): number {
+  return getTargetValuationsForMonth(state, month).reduce(function (sum, target) {
+    return sum + (target.value ?? 0);
+  }, 0);
+}
+
 export function getTotalAssetsForMonth(state: AppState, month: MonthKey): number {
-  return getVisibleAssets(state, month).reduce((sum, asset) => sum + (asset.value ?? 0), 0);
+  return (
+    getVisibleAssets(state, month).reduce((sum, asset) => sum + (asset.value ?? 0), 0) +
+    getTotalInvestmentValuationForMonth(state, month)
+  );
 }
 
 export function getTotalIncomeForMonth(state: AppState, month: MonthKey): number {
   return getVisibleIncomes(state, month).reduce((sum, income) => sum + (income.value ?? 0), 0);
-}
-
-export function getTotalInvestmentForMonth(state: AppState, month: MonthKey): number {
-  const record = getRecord(state, month);
-  return record ? sumValues(record.investmentAmounts) : 0;
 }
 
 export function getExpenseEstimate(state: AppState, month: MonthKey): number | null {
@@ -194,7 +206,11 @@ export function getLatestDataMonth(state: AppState): MonthKey {
   const records = sortByMonth(state.monthlyRecords);
   const lastWithAssets = [...records]
     .reverse()
-    .find((record) => Object.values(record.assetValues).some((value) => value !== null));
+    .find(
+      (record) =>
+        Object.values(record.assetValues).some((value) => value !== null) ||
+        Object.values(record.investmentValuations).some((value) => value !== null),
+    );
 
   return lastWithAssets?.month ?? records[records.length - 1]?.month ?? state.months[0];
 }
@@ -286,25 +302,48 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
     };
   }
 
-  const monthsUntilEvent = diffMonths(month, targetEvent.month) + 1;
-  const eventCost = upcomingPlans
-    .filter((plan) => compareMonths(plan.month, targetEvent.month) <= 0)
-    .reduce((sum, plan) => sum + plan.amount, 0);
-  const cumulativeIncome = monthlyIncome * monthsUntilEvent;
-  const cumulativeExpense = monthlyExpense * monthsUntilEvent + eventCost;
-  const surplusAssets = cumulativeIncome - cumulativeExpense - settings.emergencyFund;
-  const investableAmount = Math.max(0, Math.floor(surplusAssets / monthsUntilEvent));
+  const eventComparisons = upcomingPlans.map(function (plan) {
+    const monthsUntilEvent = diffMonths(month, plan.month) + 1;
+    const eventCost = upcomingPlans
+      .filter(function (item) {
+        return compareMonths(item.month, plan.month) <= 0;
+      })
+      .reduce(function (sum, item) {
+        return sum + item.amount;
+      }, 0);
+    const cumulativeIncome = monthlyIncome * monthsUntilEvent;
+    const cumulativeExpense = monthlyExpense * monthsUntilEvent + eventCost;
+    const surplusAssets = cumulativeIncome - cumulativeExpense - settings.emergencyFund;
+    const investableAmount = Math.max(0, Math.floor(surplusAssets / monthsUntilEvent));
+
+    return {
+      plan,
+      monthsUntilEvent,
+      cumulativeIncome,
+      cumulativeExpense,
+      surplusAssets,
+      investableAmount,
+    };
+  });
+
+  const selected = [...eventComparisons].sort(function (left, right) {
+    if (left.investableAmount !== right.investableAmount) {
+      return left.investableAmount - right.investableAmount;
+    }
+
+    return compareMonths(left.plan.month, right.plan.month);
+  })[0];
 
   return {
     available: true,
     reasons: [],
-    targetEvent,
-    monthsUntilEvent,
-    cumulativeIncome,
-    cumulativeExpense,
-    surplusAssets,
-    investableAmount,
-    allocations: allocate(investableAmount, targets),
+    targetEvent: selected.plan,
+    monthsUntilEvent: selected.monthsUntilEvent,
+    cumulativeIncome: selected.cumulativeIncome,
+    cumulativeExpense: selected.cumulativeExpense,
+    surplusAssets: selected.surplusAssets,
+    investableAmount: selected.investableAmount,
+    allocations: allocate(selected.investableAmount, targets),
   };
 }
 
@@ -312,22 +351,22 @@ export function buildTrendData(state: AppState, subject: string) {
   return getSortedMonths(state)
     .filter((month) => getRecord(state, month)?.confirmed === true)
     .map((month) => {
-    const base = { month, label: month, value: 0 };
+      const base = { month, label: month, value: 0 };
 
-    if (subject === 'total-assets') {
-      return { ...base, value: getTotalAssetsForMonth(state, month) };
-    }
+      if (subject === 'total-assets') {
+        return { ...base, value: getTotalAssetsForMonth(state, month) };
+      }
 
-    if (subject === 'income') {
-      return { ...base, value: getTotalIncomeForMonth(state, month) };
-    }
+      if (subject === 'income') {
+        return { ...base, value: getTotalIncomeForMonth(state, month) };
+      }
 
-    if (subject === 'expense') {
-      return { ...base, value: getResolvedExpense(state, month) ?? 0 };
-    }
+      if (subject === 'expense') {
+        return { ...base, value: getResolvedExpense(state, month) ?? 0 };
+      }
 
-    const record = getRecord(state, month);
-    return { ...base, value: record?.assetValues[subject] ?? 0 };
+      const record = getRecord(state, month);
+      return { ...base, value: record?.assetValues[subject] ?? record?.investmentValuations[subject] ?? 0 };
     });
 }
 

@@ -13,7 +13,7 @@ import { createSeedState } from '../mock-data/seed';
 import type { AppState, InvestmentTarget, LifePlanEvent, MonthKey, ToastMessage } from '../types';
 import { uid } from '../lib/utils';
 
-const STORAGE_KEY = 'asset-management-mockups-v1';
+const STORAGE_KEY = 'asset-management-mockups-v2';
 
 interface AppStoreValue {
   state: AppState;
@@ -30,7 +30,7 @@ interface AppStoreValue {
   updateIncomeValue: (month: MonthKey, incomeId: string, value: number | null) => void;
   editIncome: (month: MonthKey, incomeId: string, name: string, value: number | null) => boolean;
   deleteIncome: (incomeId: string) => void;
-  updateInvestmentAmount: (month: MonthKey, targetId: string, value: number | null) => void;
+  updateInvestmentValuation: (month: MonthKey, targetId: string, value: number | null) => void;
   confirmMonth: (month: MonthKey, override: number | null) => boolean;
   saveEmergencyFund: (amount: number) => void;
   saveInvestmentTargets: (targets: InvestmentTarget[]) => void;
@@ -110,15 +110,15 @@ function ensureTargetShape(state: AppState, effectiveFrom: MonthKey, targets: In
       return compareMonths(record.month, effectiveFrom) >= 0;
     })
     .forEach(function (record) {
-      Object.keys(record.investmentAmounts).forEach(function (targetId) {
+      Object.keys(record.investmentValuations).forEach(function (targetId) {
         if (allowed.has(targetId) === false) {
-          delete record.investmentAmounts[targetId];
+          delete record.investmentValuations[targetId];
         }
       });
 
       targets.forEach(function (target) {
-        if ((target.id in record.investmentAmounts) === false) {
-          record.investmentAmounts[target.id] = null;
+        if ((target.id in record.investmentValuations) === false) {
+          record.investmentValuations[target.id] = null;
         }
       });
     });
@@ -412,14 +412,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const updateInvestmentAmount = useCallback(function (month: MonthKey, targetId: string, value: number | null) {
+  const updateInvestmentValuation = useCallback(function (month: MonthKey, targetId: string, value: number | null) {
     setState(function (current) {
       const next = cloneState(current);
       const record = next.monthlyRecords.find(function (item) {
         return item.month === month;
       });
       if (record) {
-        record.investmentAmounts[targetId] = value;
+        record.investmentValuations[targetId] = value;
       }
       return next;
     });
@@ -544,7 +544,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         updateIncomeValue,
         editIncome,
         deleteIncome,
-        updateInvestmentAmount,
+        updateInvestmentValuation,
         confirmMonth,
         saveEmergencyFund,
         saveInvestmentTargets,
@@ -568,7 +568,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       updateIncomeValue,
       editIncome,
       deleteIncome,
-      updateInvestmentAmount,
+      updateInvestmentValuation,
       confirmMonth,
       saveEmergencyFund,
       saveInvestmentTargets,
