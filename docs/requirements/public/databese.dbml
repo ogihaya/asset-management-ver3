@@ -1,3 +1,7 @@
+// Synchronized pair:
+// - English DBML: docs/requirements/public/databese.dbml
+// - Japanese DBML: docs/requirements/public/databese_ja.dbml
+// Keep both files synchronized whenever either file is updated.
 // Asset management application database design
 // PostgreSQL-oriented DBML
 // *_month columns store the first day of the target month.
