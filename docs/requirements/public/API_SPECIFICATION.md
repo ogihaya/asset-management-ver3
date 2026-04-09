@@ -9,10 +9,13 @@
 
 ### 1.2 認証方式
 - 認証は Cookie session 方式とする。
-- ログイン成功時に、HttpOnly Cookie にセッショントークンを設定する。
+- ログイン成功時に、`HttpOnly` な Cookie にセッショントークンを設定する。
+- Cookie の `SameSite` は `Lax` とする。
+- HTTPS 環境では Cookie に `Secure` 属性を付与する。
 - 認証が必要なAPIでは、ブラウザが Cookie を自動送信する前提とする。
 - セッション有効期限は 30 日とする。
 - 複数端末からの同時ログインを許可する。
+- セッション有効期限は、認証系APIアクセス時に延長してよい。
 
 ### 1.3 共通ヘッダー
 - リクエスト:
@@ -50,6 +53,7 @@
 - `error.code`: エラー種別を示す機械可読コード。
 - `error.message`: 画面表示に使う要約メッセージ。
 - `error.details`: フィールド単位や補足情報が必要な場合のみ返す。
+- 画面分岐や入力補助が必要な場合は、`message` ではなく `code` と `details` を参照する。
 
 ### 1.5 ページネーション
 - v1 ではページネーションを必須としない。
@@ -289,7 +293,7 @@
       "regular_assets_total_yen": 1750000,
       "top_assets": [
         {
-          "asset_id": "asset_1",
+          "asset_id": 1,
           "name": "住信SBIネット銀行",
           "value_yen": 1200000,
           "ratio_percent": 36.92,
@@ -303,7 +307,7 @@
       "total_valuation_yen": 1500000,
       "targets": [
         {
-          "investment_target_id": "target_1",
+          "investment_target_id": 1,
           "name": "eMAXIS Slim 全世界株式",
           "actual_ratio_percent": 50.25,
           "ideal_ratio_percent": 50.00,
@@ -327,7 +331,7 @@
       },
       "allocations": [
         {
-          "investment_target_id": "target_1",
+          "investment_target_id": 1,
           "name": "eMAXIS Slim 全世界株式",
           "allocated_amount_yen": 35000
         }
@@ -340,13 +344,13 @@
         { "subject_type": "expense", "label": "支出" }
       ],
       "assets": [
-        { "subject_type": "asset", "subject_id": "asset_1", "label": "住信SBIネット銀行" }
+        { "subject_type": "asset", "subject_id": 1, "label": "住信SBIネット銀行" }
       ],
       "investment_targets": [
-        { "subject_type": "investment_target", "subject_id": "target_1", "label": "eMAXIS Slim 全世界株式" }
+        { "subject_type": "investment_target", "subject_id": 1, "label": "eMAXIS Slim 全世界株式" }
       ],
       "historical": [
-        { "subject_type": "asset", "subject_id": "asset_99", "label": "旧口座 (履歴)" }
+        { "subject_type": "asset", "subject_id": 99, "label": "旧口座 (履歴)" }
       ]
     }
   },
@@ -425,27 +429,27 @@
     "confirm_error": "資産に未入力があります。",
     "assets": [
       {
-        "asset_id": "asset_1",
+        "asset_id": 1,
         "name": "住信SBIネット銀行",
         "value_yen": 1200000
       }
     ],
     "deleted_assets": [
       {
-        "asset_id": "asset_9",
+        "asset_id": 9,
         "name": "旧証券口座"
       }
     ],
     "incomes": [
       {
-        "income_id": "income_1",
+        "income_id": 1,
         "name": "給与",
         "value_yen": 350000
       }
     ],
     "investment_valuations": [
       {
-        "investment_target_id": "target_1",
+        "investment_target_id": 1,
         "name": "eMAXIS Slim 全世界株式",
         "value_yen": 753750
       }
@@ -472,7 +476,7 @@
 ```json
 {
   "data": {
-    "asset_id": "asset_1",
+    "asset_id": 1,
     "name": "住信SBIネット銀行"
   },
   "meta": {
@@ -601,7 +605,7 @@
 {
   "data": [
     {
-      "life_plan_id": "life_1",
+      "life_plan_id": 1,
       "month": "2027-01",
       "title": "引っ越し費用",
       "amount_yen": 500000,
@@ -663,7 +667,7 @@
     "emergency_fund_yen": 1000000,
     "investment_target_allocations": [
       {
-        "investment_target_id": "target_1",
+        "investment_target_id": 1,
         "name": "eMAXIS Slim 全世界株式",
         "ratio_percent": 50.0
       }
@@ -723,7 +727,7 @@
     "effective_from_month": "2026-05",
     "targets": [
       {
-        "investment_target_id": "target_1",
+        "investment_target_id": 1,
         "name": "eMAXIS Slim 全世界株式",
         "ratio_percent": 50.0
       }
