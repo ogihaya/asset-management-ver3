@@ -373,7 +373,9 @@ export function MonthlyRecordPage() {
                         <div className='text-xs text-ink/45'>配分比率 {target.ratio}%</div>
                       </div>
                       <TextInput
+                        type='number'
                         inputMode='numeric'
+                        min='0'
                         placeholder='評価額'
                         value={record.investmentValuations[target.id] === null || record.investmentValuations[target.id] === undefined ? '' : String(record.investmentValuations[target.id])}
                         onChange={(event) => updateInvestmentValuation(selectedMonth, target.id, toNumber(event.target.value))}

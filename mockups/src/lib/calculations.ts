@@ -249,6 +249,20 @@ export function getConfirmability(state: AppState, month: MonthKey): { canConfir
     };
   }
 
+  const emptyCategories: string[] = [];
+  if (getVisibleAssets(state, month).length === 0) {
+    emptyCategories.push('資産');
+  }
+  if (getVisibleIncomes(state, month).length === 0) {
+    emptyCategories.push('収入');
+  }
+  if (emptyCategories.length > 0) {
+    return {
+      canConfirm: false,
+      reason: `${emptyCategories.join('、')}がありません。追加されるまで月次確定できません。`,
+    };
+  }
+
   const missingInputs = getMissingMonthlyInputs(state, month);
   if (missingInputs.length > 0) {
     return {
