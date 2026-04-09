@@ -457,6 +457,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateInvestmentValuation = useCallback(function (month: MonthKey, targetId: string, value: number | null) {
     setState(function (current) {
+      if (value !== null && value < 0) {
+        return withToast(current, 'warning', '投資評価額は0円以上で入力してください。');
+      }
+
       const next = cloneState(current);
       const record = next.monthlyRecords.find(function (item) {
         return item.month === month;
