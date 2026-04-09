@@ -95,8 +95,7 @@ export function getVisibleAssets(state: AppState, month: MonthKey): ListedItem[]
       id: asset.id,
       name: getNameForAsset(asset, month),
       value: record?.assetValues[asset.id] ?? null,
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'ja'));
+    }));
 }
 
 export function getDeletedAssets(state: AppState, month: MonthKey): ListedItem[] {
@@ -107,8 +106,7 @@ export function getDeletedAssets(state: AppState, month: MonthKey): ListedItem[]
       id: asset.id,
       name: getNameForAsset(asset, addMonths(month, -1)),
       value: null,
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'ja'));
+    }));
 }
 
 export function getVisibleIncomes(state: AppState, month: MonthKey): ListedItem[] {
@@ -119,8 +117,7 @@ export function getVisibleIncomes(state: AppState, month: MonthKey): ListedItem[
       id: income.id,
       name: getNameForIncome(income, month),
       value: record?.incomeValues[income.id] ?? null,
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'ja'));
+    }));
 }
 
 export function getTargetsForMonth(state: AppState, month: MonthKey): InvestmentTarget[] {
@@ -429,6 +426,25 @@ export function buildTrendData(state: AppState, subject: string) {
       const record = getRecord(state, month);
       return { ...base, value: record?.assetValues[subject] ?? record?.investmentValuations[subject] ?? 0 };
     });
+}
+
+export function hasTrendDataForSubject(state: AppState, subject: string): boolean {
+  const confirmedMonths = getSortedMonths(state).filter((month) => getRecord(state, month)?.confirmed === true);
+
+  if (confirmedMonths.length === 0) {
+    return false;
+  }
+
+  if (subject === 'total-assets' || subject === 'income' || subject === 'expense') {
+    return true;
+  }
+
+  return confirmedMonths.some(function (month) {
+    const record = getRecord(state, month);
+    const assetValue = record?.assetValues[subject];
+    const targetValue = record?.investmentValuations[subject];
+    return (assetValue !== undefined && assetValue !== null) || (targetValue !== undefined && targetValue !== null);
+  });
 }
 
 export function getDisplayMonthOptions(state: AppState): MonthKey[] {

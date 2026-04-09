@@ -29,7 +29,7 @@ interface AppStoreValue {
   addIncome: (month: MonthKey, name: string) => boolean;
   updateIncomeValue: (month: MonthKey, incomeId: string, value: number | null) => void;
   editIncome: (month: MonthKey, incomeId: string, name: string, value: number | null) => boolean;
-  deleteIncome: (incomeId: string) => void;
+  deleteIncome: (month: MonthKey, incomeId: string) => void;
   updateInvestmentValuation: (month: MonthKey, targetId: string, value: number | null) => void;
   confirmMonth: (month: MonthKey, override: number | null) => boolean;
   saveEmergencyFund: (amount: number) => void;
@@ -385,9 +385,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return succeeded;
   }, []);
 
-  const deleteIncome = useCallback(function (incomeId: string) {
+  const deleteIncome = useCallback(function (month: MonthKey, incomeId: string) {
     setState(function (current) {
-      const effectiveFrom = firstUnconfirmedOrLatest(current);
       const next = cloneState(current);
       const income = next.incomes.find(function (item) {
         return item.id === incomeId;
@@ -398,17 +397,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const periods = income.periods.slice();
       const currentPeriod = periods[periods.length - 1];
-      currentPeriod.to = addMonths(effectiveFrom, -1);
+      currentPeriod.to = addMonths(month, -1);
       income.periods = periods;
       next.monthlyRecords
         .filter(function (record) {
-          return compareMonths(record.month, effectiveFrom) >= 0;
+          return compareMonths(record.month, month) >= 0;
         })
         .forEach(function (record) {
           delete record.incomeValues[incomeId];
         });
 
-      return withToast(next, 'info', '収入明細を削除しました。');
+      return withToast(next, 'info', '収入明細を削除しました。選択月から将来の月で非表示になります。');
     });
   }, []);
 

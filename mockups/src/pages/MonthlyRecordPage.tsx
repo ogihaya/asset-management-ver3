@@ -7,19 +7,30 @@ import {
   getDeletedAssets,
   getExpenseEstimate,
   getFirstUnconfirmedMonth,
+  getResolvedExpense,
   getTargetsForMonth,
   getVisibleAssets,
   getVisibleIncomes,
 } from '../lib/calculations';
 import { formatMonthLabel, isPastDeadline } from '../lib/months';
 import { formatCurrency, toNumber } from '../lib/utils';
-import { Button, Card, ConfirmDialog, CurrencyHint, Field, Modal, Pill, TextInput } from '../components/ui';
+import { Button, Card, ConfirmDialog, CurrencyHint, EmptyState, Field, Modal, Pill, TextInput } from '../components/ui';
 import type { ListedItem, MonthKey } from '../types';
 
 interface RowEditorState {
   id: string;
   name: string;
   value: string;
+  initialName: string;
+  initialValue: string;
+}
+
+function isDirtyEditor(state: RowEditorState | null) {
+  if (!state) {
+    return false;
+  }
+
+  return state.name !== state.initialName || state.value !== state.initialValue;
 }
 
 export function MonthlyRecordPage() {
@@ -49,6 +60,7 @@ export function MonthlyRecordPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmOverride, setConfirmOverride] = useState('');
   const [deleteState, setDeleteState] = useState<null | { kind: 'asset' | 'income'; id: string; label: string }>(null);
+  const [discardState, setDiscardState] = useState<null | 'asset' | 'income'>(null);
 
   useEffect(() => {
     setSelectedMonth(initialMonth);
@@ -60,6 +72,7 @@ export function MonthlyRecordPage() {
   const incomes = useMemo(() => getVisibleIncomes(state, selectedMonth), [selectedMonth, state]);
   const targets = useMemo(() => getTargetsForMonth(state, selectedMonth), [selectedMonth, state]);
   const estimate = getExpenseEstimate(state, selectedMonth);
+  const resolvedExpense = getResolvedExpense(state, selectedMonth);
   const confirmability = getConfirmability(state, selectedMonth);
   const overdue = record ? record.confirmed === false && isPastDeadline(selectedMonth) : false;
 
@@ -68,11 +81,29 @@ export function MonthlyRecordPage() {
   }
 
   function openAssetEdit(item: ListedItem) {
-    setAssetEditState({ id: item.id, name: item.name, value: item.value === null ? '' : String(item.value) });
+    const value = item.value === null ? '' : String(item.value);
+    setAssetEditState({ id: item.id, name: item.name, value, initialName: item.name, initialValue: value });
   }
 
   function openIncomeEdit(item: ListedItem) {
-    setIncomeEditState({ id: item.id, name: item.name, value: item.value === null ? '' : String(item.value) });
+    const value = item.value === null ? '' : String(item.value);
+    setIncomeEditState({ id: item.id, name: item.name, value, initialName: item.name, initialValue: value });
+  }
+
+  function requestCloseAssetEdit() {
+    if (isDirtyEditor(assetEditState)) {
+      setDiscardState('asset');
+      return;
+    }
+    setAssetEditState(null);
+  }
+
+  function requestCloseIncomeEdit() {
+    if (isDirtyEditor(incomeEditState)) {
+      setDiscardState('income');
+      return;
+    }
+    setIncomeEditState(null);
   }
 
   function submitAssetAdd(event: React.FormEvent<HTMLFormElement>) {
@@ -151,20 +182,28 @@ export function MonthlyRecordPage() {
       title='月次記録'
       subtitle='資産、収入、投資評価額を入力し、支出推定を確認してから月次を確定します。確定後は編集できません。'
       stickyBottomAction={
-        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-          <div>
+        record.confirmed ? (
+          <div className='flex flex-col gap-2'>
             <div className='text-xs font-semibold uppercase tracking-[0.18em] text-ink/35'>Monthly Close</div>
-            <div className='mt-1 text-sm font-semibold text-ink'>{formatMonthLabel(selectedMonth)} の記録を確定</div>
-            {confirmability.canConfirm === false ? (
-              <div className='mt-1 text-xs text-amber'>{confirmability.reason}</div>
-            ) : (
-              <div className='mt-1 text-xs text-ink/50'>支出推定を確認し、必要なら補正してから確定します。</div>
-            )}
+            <div className='text-sm font-semibold text-ink'>{formatMonthLabel(selectedMonth)} は確定済みです</div>
+            <div className='text-xs text-ink/50'>この月の内容は閲覧のみできます。修正が必要な場合は未確定月で見直してください。</div>
           </div>
-          <Button className='w-full sm:w-auto' disabled={confirmability.canConfirm === false} onClick={openConfirmModal} type='button'>
-            月次確定
-          </Button>
-        </div>
+        ) : (
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+            <div>
+              <div className='text-xs font-semibold uppercase tracking-[0.18em] text-ink/35'>Monthly Close</div>
+              <div className='mt-1 text-sm font-semibold text-ink'>{formatMonthLabel(selectedMonth)} の記録を確定</div>
+              {confirmability.canConfirm === false ? (
+                <div className='mt-1 text-xs text-amber'>{confirmability.reason}</div>
+              ) : (
+                <div className='mt-1 text-xs text-ink/50'>支出推定を確認し、必要なら補正してから確定します。</div>
+              )}
+            </div>
+            <Button className='w-full sm:w-auto' disabled={confirmability.canConfirm === false} onClick={openConfirmModal} type='button'>
+              月次確定
+            </Button>
+          </div>
+        )
       }
     >
       {overdue ? (
@@ -188,40 +227,59 @@ export function MonthlyRecordPage() {
             翌月
           </Button>
         </div>
+        {record.confirmed ? (
+          <div className='mt-4 rounded-[24px] bg-soft px-4 py-4 text-sm text-ink'>
+            <div className='text-xs text-ink/45'>確定支出</div>
+            <div className='mt-1 font-semibold'>{formatCurrency(resolvedExpense)}</div>
+          </div>
+        ) : null}
       </Card>
 
       <section className='grid gap-6 xl:grid-cols-[1.1fr_0.9fr]'>
         <Card
           title='資産入力カード'
           description='資産は名称単位で管理し、追加後は翌月以降も入力対象として表示されます。'
-          action={
+          action={!record.confirmed ? (
             <Button type='button' variant='secondary' onClick={() => setAssetAddOpen(true)}>
               <Plus size={16} />
               追加
             </Button>
-          }
+          ) : undefined}
         >
-          <div className='space-y-3'>
-            {assets.map((asset) => (
-              <div key={asset.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px_auto] md:items-center'>
-                <div>
-                  <div className='font-medium text-ink'>{asset.name}</div>
-                  <CurrencyHint value={asset.value} />
-                </div>
-                <TextInput
-                  disabled={record.confirmed}
-                  inputMode='numeric'
-                  placeholder='金額を入力'
-                  value={asset.value === null ? '' : String(asset.value)}
-                  onChange={(event) => updateAssetValue(selectedMonth, asset.id, toNumber(event.target.value))}
-                />
-                <Button type='button' variant='ghost' onClick={() => openAssetEdit(asset)} disabled={record.confirmed}>
-                  <Pencil size={16} />
-                </Button>
-              </div>
-            ))}
-          </div>
-          {deletedAssets.length > 0 ? (
+          {assets.length > 0 ? (
+            <div className='space-y-3'>
+              {assets.map((asset) =>
+                record.confirmed ? (
+                  <div key={asset.id} className='flex items-center justify-between gap-4 rounded-[24px] border border-ink/10 bg-soft p-4 text-sm'>
+                    <div className='font-medium text-ink'>{asset.name}</div>
+                    <div className='font-semibold text-ink'>{formatCurrency(asset.value)}</div>
+                  </div>
+                ) : (
+                  <div key={asset.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px_auto] md:items-center'>
+                    <div>
+                      <div className='font-medium text-ink'>{asset.name}</div>
+                      <CurrencyHint value={asset.value} />
+                    </div>
+                    <TextInput
+                      inputMode='numeric'
+                      placeholder='金額を入力'
+                      value={asset.value === null ? '' : String(asset.value)}
+                      onChange={(event) => updateAssetValue(selectedMonth, asset.id, toNumber(event.target.value))}
+                    />
+                    <Button type='button' variant='ghost' onClick={() => openAssetEdit(asset)}>
+                      <Pencil size={16} />
+                    </Button>
+                  </div>
+                ),
+              )}
+            </div>
+          ) : (
+            <EmptyState
+              title='通常資産がまだありません'
+              description={record.confirmed ? 'この月に表示できる通常資産はありません。' : '右上の追加ボタンから通常資産を登録してください。資産が1件以上ない月は確定できません。'}
+            />
+          )}
+          {!record.confirmed && deletedAssets.length > 0 ? (
             <div className='mt-6 rounded-[24px] bg-cloud/70 p-4'>
               <div className='text-sm font-semibold text-ink'>削除済み資産を復活</div>
               <div className='mt-3 flex flex-wrap gap-2'>
@@ -240,53 +298,82 @@ export function MonthlyRecordPage() {
           <Card
             title='収入入力カード'
             description='収入名は翌月以降も再利用されます。'
-            action={
+            action={!record.confirmed ? (
               <Button type='button' variant='secondary' onClick={() => setIncomeAddOpen(true)}>
                 <Plus size={16} />
                 追加
               </Button>
-            }
+            ) : undefined}
           >
-            <div className='space-y-3'>
-              {incomes.map((income) => (
-                <div key={income.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px_auto] md:items-center'>
-                  <div>
-                    <div className='font-medium text-ink'>{income.name}</div>
-                    <CurrencyHint value={income.value} />
-                  </div>
-                  <TextInput
-                    disabled={record.confirmed}
-                    inputMode='numeric'
-                    placeholder='金額を入力'
-                    value={income.value === null ? '' : String(income.value)}
-                    onChange={(event) => updateIncomeValue(selectedMonth, income.id, toNumber(event.target.value))}
-                  />
-                  <Button type='button' variant='ghost' onClick={() => openIncomeEdit(income)} disabled={record.confirmed}>
-                    <Pencil size={16} />
-                  </Button>
-                </div>
-              ))}
-            </div>
+            {incomes.length > 0 ? (
+              <div className='space-y-3'>
+                {incomes.map((income) =>
+                  record.confirmed ? (
+                    <div key={income.id} className='flex items-center justify-between gap-4 rounded-[24px] border border-ink/10 bg-soft p-4 text-sm'>
+                      <div className='font-medium text-ink'>{income.name}</div>
+                      <div className='font-semibold text-ink'>{formatCurrency(income.value)}</div>
+                    </div>
+                  ) : (
+                    <div key={income.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px_auto] md:items-center'>
+                      <div>
+                        <div className='font-medium text-ink'>{income.name}</div>
+                        <CurrencyHint value={income.value} />
+                      </div>
+                      <TextInput
+                        inputMode='numeric'
+                        placeholder='金額を入力'
+                        value={income.value === null ? '' : String(income.value)}
+                        onChange={(event) => updateIncomeValue(selectedMonth, income.id, toNumber(event.target.value))}
+                      />
+                      <Button type='button' variant='ghost' onClick={() => openIncomeEdit(income)}>
+                        <Pencil size={16} />
+                      </Button>
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : (
+              <EmptyState
+                title='収入明細がまだありません'
+                description={record.confirmed ? 'この月に表示できる収入明細はありません。' : '右上の追加ボタンから収入明細を登録してください。収入が1件以上ない月は確定できません。'}
+              />
+            )}
           </Card>
 
           <Card title='投資入力カード' description='投資先の定義変更は設定画面で行い、ここではその月の評価額のみ入力します。'>
-            <div className='space-y-3'>
-              {targets.map((target) => (
-                <div key={target.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px] md:items-center'>
-                  <div>
-                    <div className='font-medium text-ink'>{target.name}</div>
-                    <div className='text-xs text-ink/45'>配分比率 {target.ratio}%</div>
-                  </div>
-                  <TextInput
-                    disabled={record.confirmed}
-                    inputMode='numeric'
-                    placeholder='評価額'
-                    value={record.investmentValuations[target.id] === null || record.investmentValuations[target.id] === undefined ? '' : String(record.investmentValuations[target.id])}
-                    onChange={(event) => updateInvestmentValuation(selectedMonth, target.id, toNumber(event.target.value))}
-                  />
-                </div>
-              ))}
-            </div>
+            {targets.length > 0 ? (
+              <div className='space-y-3'>
+                {targets.map((target) =>
+                  record.confirmed ? (
+                    <div key={target.id} className='flex items-center justify-between gap-4 rounded-[24px] border border-ink/10 bg-soft p-4 text-sm'>
+                      <div>
+                        <div className='font-medium text-ink'>{target.name}</div>
+                        <div className='text-xs text-ink/45'>配分比率 {target.ratio}%</div>
+                      </div>
+                      <div className='font-semibold text-ink'>{formatCurrency(record.investmentValuations[target.id] ?? null)}</div>
+                    </div>
+                  ) : (
+                    <div key={target.id} className='grid gap-3 rounded-[24px] border border-ink/10 bg-soft p-4 md:grid-cols-[1fr_220px] md:items-center'>
+                      <div>
+                        <div className='font-medium text-ink'>{target.name}</div>
+                        <div className='text-xs text-ink/45'>配分比率 {target.ratio}%</div>
+                      </div>
+                      <TextInput
+                        inputMode='numeric'
+                        placeholder='評価額'
+                        value={record.investmentValuations[target.id] === null || record.investmentValuations[target.id] === undefined ? '' : String(record.investmentValuations[target.id])}
+                        onChange={(event) => updateInvestmentValuation(selectedMonth, target.id, toNumber(event.target.value))}
+                      />
+                    </div>
+                  ),
+                )}
+              </div>
+            ) : (
+              <EmptyState
+                title='投資先はまだ設定されていません'
+                description='設定画面で投資先配分を定義すると、ここにその月の投資評価額入力欄が表示されます。投資先が未設定でも、他の入力が揃っていれば月次確定は可能です。'
+              />
+            )}
           </Card>
         </div>
       </section>
@@ -327,7 +414,7 @@ export function MonthlyRecordPage() {
 
       <Modal
         open={assetEditState !== null}
-        onClose={() => setAssetEditState(null)}
+        onClose={requestCloseAssetEdit}
         title='資産を編集'
         description='未確定月では資産名と当月金額を編集できます。削除すると次の未確定月から非表示になります。'
       >
@@ -341,7 +428,7 @@ export function MonthlyRecordPage() {
           <div className='flex justify-between gap-3'>
             <Button type='button' variant='danger' onClick={() => assetEditState && setDeleteState({ kind: 'asset', id: assetEditState.id, label: assetEditState.name })}>削除</Button>
             <div className='flex gap-3'>
-              <Button type='button' variant='secondary' onClick={() => setAssetEditState(null)}>キャンセル</Button>
+              <Button type='button' variant='secondary' onClick={requestCloseAssetEdit}>キャンセル</Button>
               <Button type='submit'>保存する</Button>
             </div>
           </div>
@@ -350,9 +437,9 @@ export function MonthlyRecordPage() {
 
       <Modal
         open={incomeEditState !== null}
-        onClose={() => setIncomeEditState(null)}
+        onClose={requestCloseIncomeEdit}
         title='収入明細を編集'
-        description='未確定月では収入名と当月金額を編集できます。'
+        description='未確定月では収入名と当月金額を編集できます。名称変更と削除は選択月から将来へ反映されます。'
       >
         <form className='space-y-4' onSubmit={submitIncomeEdit}>
           <Field label='収入名'>
@@ -364,7 +451,7 @@ export function MonthlyRecordPage() {
           <div className='flex justify-between gap-3'>
             <Button type='button' variant='danger' onClick={() => incomeEditState && setDeleteState({ kind: 'income', id: incomeEditState.id, label: incomeEditState.name })}>削除</Button>
             <div className='flex gap-3'>
-              <Button type='button' variant='secondary' onClick={() => setIncomeEditState(null)}>キャンセル</Button>
+              <Button type='button' variant='secondary' onClick={requestCloseIncomeEdit}>キャンセル</Button>
               <Button type='submit'>保存する</Button>
             </div>
           </div>
@@ -405,13 +492,34 @@ export function MonthlyRecordPage() {
             deleteAsset(deleteState.id);
             setAssetEditState(null);
           } else {
-            deleteIncome(deleteState.id);
+            deleteIncome(selectedMonth, deleteState.id);
             setIncomeEditState(null);
           }
           setDeleteState(null);
         }}
         title={deleteState ? deleteState.label + ' を削除' : '削除'}
-        description='削除は確認済み履歴を残したまま、次の未確定月から表示対象を外す扱いです。'
+        description={
+          deleteState?.kind === 'income'
+            ? '削除すると、選択月から将来の月でこの収入明細が非表示になります。'
+            : '削除すると、確認済み履歴を残したまま次の未確定月から表示対象を外します。'
+        }
+      />
+
+      <ConfirmDialog
+        open={discardState !== null}
+        onClose={() => setDiscardState(null)}
+        onConfirm={() => {
+          if (discardState === 'asset') {
+            setAssetEditState(null);
+          }
+          if (discardState === 'income') {
+            setIncomeEditState(null);
+          }
+          setDiscardState(null);
+        }}
+        title='未保存の変更を破棄'
+        description='保存していない変更があります。このまま閉じると編集内容は失われます。'
+        confirmLabel='破棄する'
       />
     </AuthenticatedShell>
   );
