@@ -46,6 +46,7 @@ ENV/
 # Database
 db_data/
 *.db
+*.dbdiagram
 *.sqlite
 *.sqlite3
 
