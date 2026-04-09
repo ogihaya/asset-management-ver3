@@ -286,6 +286,7 @@
       "investable_amount_yen": 70000
     },
     "asset_summary": {
+      "regular_assets_total_yen": 1750000,
       "top_assets": [
         {
           "asset_id": "asset_1",
@@ -319,6 +320,7 @@
       "cumulative_income_yen": 2460000,
       "cumulative_expense_yen": 1620000,
       "surplus_assets_yen": 540000,
+      "emergency_fund_yen": 1000000,
       "adopted_event": {
         "month": "2027-01",
         "title": "引っ越し費用"
@@ -354,6 +356,8 @@
 - **補足**:
   - 表示基準月は常に最新の確定済み月とする。
   - 確定済み月が存在しない場合は、主要カードを空状態用データで返す。
+  - `kpis.total_assets_yen` は `asset_summary.regular_assets_total_yen + investment_composition.total_valuation_yen` を表す。
+  - `investment_decision.emergency_fund_yen` は投資判断に使用した生活防衛資金の適用値を表す。
   - 投資構成は最新確定月の投資評価額構成比を返す。
   - 採用イベントは `年月 + 内容` のみ返す。
 
