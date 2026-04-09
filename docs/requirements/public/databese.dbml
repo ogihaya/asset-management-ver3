@@ -11,9 +11,15 @@
 // Missing monthly value rows mean "not entered yet", so 0 and blank can be distinguished.
 // Investment computation results are not persisted; they are recalculated from confirmed inputs.
 // Deleted user emails are not reusable because users.email stays globally unique.
+// For a new user, the application prepares monthly_records for the current month and next month.
 // monthly_records are created by the application when a month is confirmed and the next month is prepared.
 // expense_final_yen stores only the final confirmed monthly expense.
 // settings_revisions and settings_revision_target_allocations together represent one effective settings revision.
+// Foreign keys are handled with RESTRICT-oriented application policy; business rows are not physically deleted.
+// Display order for assets, incomes, and investment targets follows created_at order.
+// Negative values are allowed only for asset monthly values; other monetary inputs are treated as 0 or greater.
+// Names are unique within the same user scope.
+// Visibility periods for the same definition must not overlap; restoration adds a new period row.
 
 Table users {
   id int [pk, increment]
