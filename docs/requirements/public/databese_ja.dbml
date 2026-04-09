@@ -1,0 +1,271 @@
+// 同期対象ペア:
+// - 英語版DBML: docs/requirements/public/databese.dbml
+// - 日本語版DBML: docs/requirements/public/databese_ja.dbml
+// どちらかを更新した場合は、もう一方にも同じ内容を必ず反映して同期すること。
+// 資産管理アプリ DB設計（日本語版）
+// PostgreSQL 前提の DBML
+// *_月 カラムは対象月の月初日を保持する。
+// 期間重複禁止、同時点での名称重複禁止、配分比率合計 = 100.00 などの複雑制約は
+// アプリケーション層で保証する。
+// 月次入力の未入力は「値行が存在しない」ことで表現し、0円入力と区別する。
+// 投資計算結果はDBへ保存せず、確定済み入力値から毎回再計算する。
+// 論理削除したユーザーのメールアドレスは再利用しない。users.email は全体で一意のままとする。
+// 新規ユーザー作成時は、アプリケーション側で当月分と次月分の monthly_records を用意する。
+// monthly_records は月次確定時にアプリケーション側で次月分を自動生成する前提とする。
+// 最終支出円には、確定後に採用された月次支出の最終値だけを保持する。
+// 設定改定は、設定改定テーブルと設定改定投資先配分テーブルを合わせて1つの有効設定として扱う。
+// 外部キー削除方針は基本 RESTRICT 相当とし、業務データの物理削除は前提にしない。
+// 資産・収入・投資先の表示順は created_at 順を基準にする。
+// 負値を許容する金額は資産評価額のみとし、それ以外の金額は 0 以上として扱う。
+// 名称重複禁止は同一ユーザー内を対象とする。
+// 同一定義の表示期間は重複不可とし、復活時は新しい期間行を追加する。
+
+Table "ユーザー" {
+  "ID" int [pk, increment]
+  "メールアドレス" varchar(255) [not null]
+  "パスワードハッシュ" varchar(255) [not null]
+  "表示名" varchar(255)
+  "削除日時" timestamptz
+  "作成日時" timestamptz [not null, default: `now()`]
+  "更新日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("メールアドレス") [unique]
+  }
+}
+
+Table "ユーザーセッション" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "セッショントークンハッシュ" varchar(255) [not null]
+  "有効期限" timestamptz [not null]
+  "失効日時" timestamptz
+  "最終アクセス日時" timestamptz
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("セッショントークンハッシュ") [unique]
+    ("ユーザーID")
+  }
+}
+
+Table "パスワード再設定トークン" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "トークンハッシュ" varchar(255) [not null]
+  "有効期限" timestamptz [not null]
+  "使用日時" timestamptz
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("トークンハッシュ") [unique]
+    ("ユーザーID")
+  }
+}
+
+Table "資産定義" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID")
+  }
+}
+
+Table "資産名称改定" {
+  "ID" int [pk, increment]
+  "資産ID" int [not null, ref: > "資産定義"."ID"]
+  "適用開始月" date [not null]
+  "名称" varchar(255) [not null]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("資産ID", "適用開始月") [unique]
+    ("資産ID")
+  }
+}
+
+Table "資産表示期間" {
+  "ID" int [pk, increment]
+  "資産ID" int [not null, ref: > "資産定義"."ID"]
+  "表示開始月" date [not null]
+  "表示終了月" date
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("資産ID", "表示開始月") [unique]
+    ("資産ID")
+  }
+}
+
+Table "収入定義" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID")
+  }
+}
+
+Table "収入名称改定" {
+  "ID" int [pk, increment]
+  "収入ID" int [not null, ref: > "収入定義"."ID"]
+  "適用開始月" date [not null]
+  "名称" varchar(255) [not null]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("収入ID", "適用開始月") [unique]
+    ("収入ID")
+  }
+}
+
+Table "収入表示期間" {
+  "ID" int [pk, increment]
+  "収入ID" int [not null, ref: > "収入定義"."ID"]
+  "表示開始月" date [not null]
+  "表示終了月" date
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("収入ID", "表示開始月") [unique]
+    ("収入ID")
+  }
+}
+
+Table "設定改定" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "適用開始月" date [not null]
+  "生活防衛資金円" bigint [not null]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID", "適用開始月") [unique]
+    ("ユーザーID")
+  }
+}
+
+Table "投資先定義" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID")
+  }
+}
+
+Table "投資先名称改定" {
+  "ID" int [pk, increment]
+  "投資先ID" int [not null, ref: > "投資先定義"."ID"]
+  "適用開始月" date [not null]
+  "名称" varchar(255) [not null]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("投資先ID", "適用開始月") [unique]
+    ("投資先ID")
+  }
+}
+
+Table "投資先表示期間" {
+  "ID" int [pk, increment]
+  "投資先ID" int [not null, ref: > "投資先定義"."ID"]
+  "表示開始月" date [not null]
+  "表示終了月" date
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("投資先ID", "表示開始月") [unique]
+    ("投資先ID")
+  }
+}
+
+Table "設定改定投資先配分" {
+  "ID" int [pk, increment]
+  "設定改定ID" int [not null, ref: > "設定改定"."ID"]
+  "投資先ID" int [not null, ref: > "投資先定義"."ID"]
+  "配分比率パーセント" numeric(5,2) [not null]
+  "作成日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("設定改定ID", "投資先ID") [unique]
+    ("設定改定ID")
+    ("投資先ID")
+  }
+}
+
+Table "月次記録" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "対象月" date [not null]
+  "確定済み" boolean [not null, default: false]
+  "確定日時" timestamptz
+  "最終支出円" bigint
+  "作成日時" timestamptz [not null, default: `now()`]
+  "更新日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID", "対象月") [unique]
+    ("ユーザーID")
+    ("対象月")
+  }
+}
+
+Table "月次資産評価額" {
+  "ID" int [pk, increment]
+  "月次記録ID" int [not null, ref: > "月次記録"."ID"]
+  "資産ID" int [not null, ref: > "資産定義"."ID"]
+  "評価額円" bigint [not null]
+
+  Indexes {
+    ("月次記録ID", "資産ID") [unique]
+    ("月次記録ID")
+    ("資産ID")
+  }
+}
+
+Table "月次収入実績" {
+  "ID" int [pk, increment]
+  "月次記録ID" int [not null, ref: > "月次記録"."ID"]
+  "収入ID" int [not null, ref: > "収入定義"."ID"]
+  "金額円" bigint [not null]
+
+  Indexes {
+    ("月次記録ID", "収入ID") [unique]
+    ("月次記録ID")
+    ("収入ID")
+  }
+}
+
+Table "月次投資評価額" {
+  "ID" int [pk, increment]
+  "月次記録ID" int [not null, ref: > "月次記録"."ID"]
+  "投資先ID" int [not null, ref: > "投資先定義"."ID"]
+  "評価額円" bigint [not null]
+
+  Indexes {
+    ("月次記録ID", "投資先ID") [unique]
+    ("月次記録ID")
+    ("投資先ID")
+  }
+}
+
+Table "ライフプランイベント" {
+  "ID" int [pk, increment]
+  "ユーザーID" int [not null, ref: > "ユーザー"."ID"]
+  "イベント月" date [not null]
+  "内容" varchar(255) [not null]
+  "金額円" bigint [not null]
+  "メモ" text
+  "作成日時" timestamptz [not null, default: `now()`]
+  "更新日時" timestamptz [not null, default: `now()`]
+
+  Indexes {
+    ("ユーザーID")
+    ("イベント月")
+  }
+}
