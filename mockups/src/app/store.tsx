@@ -7,7 +7,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getConfirmability, getFirstUnconfirmedMonth, getLatestDataMonth, getSettingsForMonth } from '../lib/calculations';
+import {
+  getConfirmability,
+  getFirstUnconfirmedMonth,
+  getLatestDataMonth,
+  getSettingsForMonth,
+  getTargetsForMonth,
+  isAssetVisibleInMonth,
+  isIncomeVisibleInMonth,
+} from '../lib/calculations';
 import { addMonths, compareMonths } from '../lib/months';
 import { createSeedState } from '../mock-data/seed';
 import type { AppState, InvestmentTarget, LifePlanEvent, MonthKey, ToastMessage } from '../types';
@@ -122,6 +130,42 @@ function ensureTargetShape(state: AppState, effectiveFrom: MonthKey, targets: In
         }
       });
     });
+}
+
+function createMonthlyRecordForMonth(state: AppState, month: MonthKey) {
+  const assetValues: Record<string, null> = {};
+  const incomeValues: Record<string, null> = {};
+  const investmentValuations: Record<string, null> = {};
+
+  state.assets
+    .filter(function (asset) {
+      return isAssetVisibleInMonth(asset, month);
+    })
+    .forEach(function (asset) {
+      assetValues[asset.id] = null;
+    });
+
+  state.incomes
+    .filter(function (income) {
+      return isIncomeVisibleInMonth(income, month);
+    })
+    .forEach(function (income) {
+      incomeValues[income.id] = null;
+    });
+
+  getTargetsForMonth(state, month).forEach(function (target) {
+    investmentValuations[target.id] = null;
+  });
+
+  return {
+    month,
+    confirmed: false,
+    confirmedAt: null,
+    expenseOverride: null,
+    assetValues,
+    incomeValues,
+    investmentValuations,
+  };
 }
 
 export function AppProvider({ children }: { children: ReactNode }) {
@@ -443,6 +487,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
       record.expenseOverride = override;
       record.confirmed = true;
       record.confirmedAt = new Date().toISOString();
+      const sortedMonths = [...next.months].sort(compareMonths);
+      const lastMonth = sortedMonths[sortedMonths.length - 1];
+      if (month === lastMonth) {
+        const nextMonth = addMonths(month, 1);
+        const exists = next.months.includes(nextMonth) || next.monthlyRecords.some(function (item) {
+          return item.month === nextMonth;
+        });
+
+        if (exists === false) {
+          next.months.push(nextMonth);
+          next.months.sort(compareMonths);
+          next.monthlyRecords.push(createMonthlyRecordForMonth(next, nextMonth));
+          next.monthlyRecords.sort(function (left, right) {
+            return compareMonths(left.month, right.month);
+          });
+        }
+      }
       succeeded = true;
       return withToast(next, 'success', month + ' を確定しました。');
     });
