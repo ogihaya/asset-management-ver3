@@ -2,7 +2,7 @@
 
 ## 1. 設計方針
 ### 1.1 命名規則
-- 実装原本は [databese.dbml](/Users/ogihaya/Documents/プログラミング/資産管理アプリ/docs/requirements/public/databese.dbml) とし、レビュー補助として [databese_ja.dbml](/Users/ogihaya/Documents/プログラミング/資産管理アプリ/docs/requirements/public/databese_ja.dbml) を併記する。
+- 実装原本は [database.dbml](/Users/ogihaya/Documents/プログラミング/資産管理アプリ/docs/requirements/public/database.dbml) とし、レビュー補助として [database_ja.dbml](/Users/ogihaya/Documents/プログラミング/資産管理アプリ/docs/requirements/public/database_ja.dbml) を併記する。
 - テーブル名・カラム名は英語の `snake_case` を採用する。
 - 主キーは整数連番 `id`、外部キーは `<parent>_id` を採用する。
 - 月単位の有効日や対象月は `*_month` で統一し、月初日の `date` で保持する。

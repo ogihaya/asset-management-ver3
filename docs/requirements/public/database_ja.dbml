@@ -1,6 +1,6 @@
 // 同期対象ペア:
-// - 英語版DBML: docs/requirements/public/databese.dbml
-// - 日本語版DBML: docs/requirements/public/databese_ja.dbml
+// - 英語版DBML: docs/requirements/public/database.dbml
+// - 日本語版DBML: docs/requirements/public/database_ja.dbml
 // どちらかを更新した場合は、もう一方にも同じ内容を必ず反映して同期すること。
 // 資産管理アプリ DB設計（日本語版）
 // PostgreSQL 前提の DBML
