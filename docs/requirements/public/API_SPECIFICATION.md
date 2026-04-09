@@ -10,6 +10,7 @@
 ### 1.2 認証方式
 - 認証は Cookie session 方式とする。
 - ログイン成功時に、`HttpOnly` な Cookie にセッショントークンを設定する。
+- Cookie 名は `asset_management_session` とする。
 - Cookie の `SameSite` は `Lax` とする。
 - HTTPS 環境では Cookie に `Secure` 属性を付与する。
 - 認証が必要なAPIでは、ブラウザが Cookie を自動送信する前提とする。
@@ -169,7 +170,7 @@
 ### 2.4 `GET /auth/status`
 - **説明**: 現在のセッション状態を確認する。
 - **リクエスト**: なし
-- **レスポンス例** (`200`):
+- **認証済みレスポンス例** (`200`):
 ```json
 {
   "data": {
@@ -178,6 +179,16 @@
       "id": 1,
       "email": "user@example.com"
     }
+  },
+  "meta": {}
+}
+```
+- **未ログイン時レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "authenticated": false,
+    "user": null
   },
   "meta": {}
 }
@@ -192,6 +203,9 @@
   }
 }
 ```
+- **補足**:
+  - 通常の未ログイン状態は `200` で返す。
+  - セッション期限切れのみ `401 SESSION_EXPIRED` を返す。
 
 ### 2.5 `POST /auth/password-reset/request`
 - **説明**: パスワード再設定メール送信を開始する。
@@ -243,6 +257,9 @@
   - `401 PASSWORD_RESET_TOKEN_INVALID`
   - `401 PASSWORD_RESET_TOKEN_EXPIRED`
   - `422 VALIDATION_ERROR`
+- **補足**:
+  - 再設定成功後に自動ログインは行わない。
+  - 画面はログイン画面へ戻す前提とする。
 
 ### 2.7 `GET /users/me`
 - **説明**: ログイン中ユーザーの最小プロフィールを取得する。
@@ -273,6 +290,7 @@
 ```
 - **補足**:
   - 退会後、全セッションを無効化する。
+  - `asset_management_session` Cookie を削除する。
   - 削除済みメールアドレスは再利用不可とする。
 
 ## 3. ダッシュボードAPI
@@ -711,6 +729,21 @@
   "note": "敷金・礼金込み"
 }
 ```
+- **レスポンス例** (`201`):
+```json
+{
+  "data": {
+    "life_plan_id": 1,
+    "month": "2027-01",
+    "title": "引っ越し費用",
+    "amount_yen": 500000,
+    "note": "敷金・礼金込み"
+  },
+  "meta": {
+    "message": "ライフプランを追加しました。"
+  }
+}
+```
 
 ### 5.3 `PATCH /life-plans/{life_plan_id}`
 - **説明**: ライフプランイベントを更新する。
@@ -721,6 +754,21 @@
   "title": "引っ越し費用",
   "amount_yen": 550000,
   "note": "初期費用込み"
+}
+```
+- **レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "life_plan_id": 1,
+    "month": "2027-01",
+    "title": "引っ越し費用",
+    "amount_yen": 550000,
+    "note": "初期費用込み"
+  },
+  "meta": {
+    "message": "ライフプランを更新しました。"
+  }
 }
 ```
 
