@@ -108,6 +108,7 @@ export interface InvestmentComputation {
   cumulativeIncome: number;
   cumulativeExpense: number;
   surplusAssets: number;
+  emergencyFund: number;
   investableAmount: number;
   allocations: AllocationResult[];
 }
