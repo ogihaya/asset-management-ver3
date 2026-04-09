@@ -6,6 +6,7 @@ import { useAppStore } from '../app/store';
 import {
   buildTrendData,
   getForecastSummary,
+  getNameForAsset,
   getInvestmentCompositionForMonth,
   getInvestmentComputation,
   getLatestConfirmedMonth,
@@ -15,6 +16,8 @@ import {
   getTotalInvestmentValuationForMonth,
   getResolvedExpense,
   getVisibleAssets,
+  hasTrendDataForSubject,
+  isAssetVisibleInMonth,
 } from '../lib/calculations';
 import { formatMonthLabel } from '../lib/months';
 import { formatCurrency, formatPercent } from '../lib/utils';
@@ -90,6 +93,7 @@ export function DashboardPage() {
           return {
             ...asset,
             ratio,
+            isLiability: (asset.value ?? 0) < 0,
           };
         });
     },
@@ -106,6 +110,7 @@ export function DashboardPage() {
   const forecast = analysisMonth ? getForecastSummary(state, analysisMonth) : null;
   const composition = analysisMonth ? getInvestmentCompositionForMonth(state, analysisMonth) : null;
   const rawData = buildTrendData(state, subject);
+  const hasTrendData = hasTrendDataForSubject(state, subject);
   const graphData = useMemo(
     function () {
       if (range === 'all') {
@@ -114,6 +119,62 @@ export function DashboardPage() {
       return rawData.slice(-Number(range));
     },
     [range, rawData],
+  );
+  const graphOptions = useMemo(
+    function () {
+      if (!analysisMonth || !settings) {
+        return {
+          activeAssets: [] as Array<{ id: string; label: string }>,
+          historicalAssets: [] as Array<{ id: string; label: string }>,
+          activeTargets: [] as Array<{ id: string; label: string }>,
+          historicalTargets: [] as Array<{ id: string; label: string }>,
+        };
+      }
+
+      const activeAssetIds = new Set(visibleAssets.map(function (asset) {
+        return asset.id;
+      }));
+      const activeTargetIds = new Set(settings.targets.map(function (target) {
+        return target.id;
+      }));
+
+      const activeAssets = visibleAssets.map(function (asset) {
+        return { id: asset.id, label: asset.name };
+      });
+      const historicalAssets = state.assets
+        .filter(function (asset) {
+          return activeAssetIds.has(asset.id) === false && isAssetVisibleInMonth(asset, analysisMonth) === false;
+        })
+        .map(function (asset) {
+          return {
+            id: asset.id,
+            label: `${getNameForAsset(asset, analysisMonth)} (履歴)`,
+          };
+        });
+
+      const activeTargets = settings.targets.map(function (target) {
+        return { id: target.id, label: target.name };
+      });
+
+      const historicalTargetMap = new Map<string, string>();
+      state.settingsHistory.forEach(function (revision) {
+        revision.targets.forEach(function (target) {
+          if (activeTargetIds.has(target.id) === false) {
+            historicalTargetMap.set(target.id, `${target.name} (履歴)`);
+          }
+        });
+      });
+
+      return {
+        activeAssets,
+        historicalAssets,
+        activeTargets,
+        historicalTargets: Array.from(historicalTargetMap.entries()).map(function ([id, label]) {
+          return { id, label };
+        }),
+      };
+    },
+    [analysisMonth, settings, state.assets, state.settingsHistory, visibleAssets],
   );
 
   return (
@@ -187,7 +248,10 @@ export function DashboardPage() {
                       <div key={asset.id} className='rounded-[20px] bg-white/75 px-4 py-4 text-sm'>
                         <div className='flex items-start justify-between gap-4'>
                           <div className='min-w-0'>
-                            <div className='truncate font-medium text-ink'>{asset.name}</div>
+                            <div className='flex items-center gap-2'>
+                              <div className='truncate font-medium text-ink'>{asset.name}</div>
+                              {asset.isLiability ? <Pill tone='warning'>負債</Pill> : null}
+                            </div>
                             <div className='mt-1 text-xs text-ink/45'>
                               {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
                             </div>
@@ -314,9 +378,9 @@ export function DashboardPage() {
             </div>
 
             <div className='rounded-[24px] bg-cloud/60 p-5'>
-              {investment.available ? (
-                <>
-                  <div className='mb-3 text-sm font-semibold text-ink'>投資判断</div>
+                      {investment.available ? (
+                        <>
+                          <div className='mb-3 text-sm font-semibold text-ink'>投資判断</div>
                   <InfoList
                     rows={[
                       { label: '投資可能額', value: formatCurrency(investment.investableAmount), emphasize: true },
@@ -325,7 +389,7 @@ export function DashboardPage() {
                       { label: '余力資産', value: formatCurrency(investment.surplusAssets) },
                       {
                         label: '制約イベント',
-                        value: investment.targetEvent ? `${investment.targetEvent.title} / ${formatMonthLabel(investment.targetEvent.month)}` : '未設定',
+                        value: investment.targetEvent ? `${formatMonthLabel(investment.targetEvent.month)} / ${investment.targetEvent.title}` : '未設定',
                       },
                     ]}
                   />
@@ -364,26 +428,40 @@ export function DashboardPage() {
               <option value='total-assets'>総資産</option>
               <option value='income'>収入</option>
               <option value='expense'>支出</option>
-              {visibleAssets.length > 0 ? (
+              {graphOptions.activeAssets.length > 0 ? (
                 <optgroup label='通常資産'>
-                  {visibleAssets.map((asset) => (
+                  {graphOptions.activeAssets.map((asset) => (
                     <option key={asset.id} value={asset.id}>
-                      {asset.name}
+                      {asset.label}
                     </option>
                   ))}
                 </optgroup>
               ) : null}
-              {composition?.items.length ? (
+              {graphOptions.activeTargets.length > 0 ? (
                 <optgroup label='投資先評価額'>
-                  {composition.items.map((target) => (
+                  {graphOptions.activeTargets.map((target) => (
                     <option key={target.id} value={target.id}>
-                      {target.name}
+                      {target.label}
+                    </option>
+                  ))}
+                </optgroup>
+              ) : null}
+              {graphOptions.historicalAssets.length > 0 || graphOptions.historicalTargets.length > 0 ? (
+                <optgroup label='履歴項目'>
+                  {graphOptions.historicalAssets.map((asset) => (
+                    <option key={asset.id} value={asset.id}>
+                      {asset.label}
+                    </option>
+                  ))}
+                  {graphOptions.historicalTargets.map((target) => (
+                    <option key={target.id} value={target.id}>
+                      {target.label}
                     </option>
                   ))}
                 </optgroup>
               ) : null}
             </select>
-            <div className='flex flex-wrap gap-2'>
+            <div className='flex gap-2 overflow-x-auto pb-1'>
               {[
                 ['3', '3か月'],
                 ['6', '6か月'],
@@ -404,12 +482,16 @@ export function DashboardPage() {
           <Pill tone='neutral'>初期表示期間: 6か月</Pill>
         </div>
         <div className='mt-6'>
-          {graphData.length > 0 ? (
+          {hasTrendData ? (
             <AssetTrendChart data={graphData} />
           ) : (
             <EmptyState
-              title='確定済みの月次記録がまだありません'
-              description='折れ線グラフは確定済み月のみを表示します。月次記録を確定するとここに推移が表示されます。'
+              title={analysisMonth ? '選択中の対象はまだ表示できません' : '確定済みの月次記録がまだありません'}
+              description={
+                analysisMonth
+                  ? 'この対象は確定済み月に表示できる値がまだありません。別の対象を選ぶか、月次記録を確定してください。'
+                  : '折れ線グラフは確定済み月のみを表示します。月次記録を確定するとここに推移が表示されます。'
+              }
             />
           )}
         </div>
@@ -422,12 +504,15 @@ export function DashboardPage() {
         description='最新確定月の通常資産を、評価額の絶対値が大きい順に一覧表示します。'
         className='max-w-2xl'
       >
-        <div className='grid gap-3'>
+        <div className='grid max-h-[60vh] gap-3 overflow-y-auto pr-1'>
           {assetSummaryRows.map((asset) => (
             <div key={asset.id} className='rounded-[20px] bg-cloud/45 px-4 py-4 text-sm'>
               <div className='flex items-start justify-between gap-4'>
                 <div className='min-w-0'>
-                  <div className='truncate font-medium text-ink'>{asset.name}</div>
+                  <div className='flex items-center gap-2'>
+                    <div className='truncate font-medium text-ink'>{asset.name}</div>
+                    {asset.isLiability ? <Pill tone='warning'>負債</Pill> : null}
+                  </div>
                   <div className='mt-1 text-xs text-ink/45'>
                     {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
                   </div>
