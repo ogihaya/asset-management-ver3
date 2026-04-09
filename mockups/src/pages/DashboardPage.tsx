@@ -72,6 +72,14 @@ export function DashboardPage() {
     },
     [analysisMonth, state],
   );
+  const regularAssetsTotal = useMemo(
+    function () {
+      return visibleAssets.reduce(function (sum, asset) {
+        return sum + (asset.value ?? 0);
+      }, 0);
+    },
+    [visibleAssets],
+  );
   const assetSummaryRows = useMemo(
     function () {
       if (!analysisMonth) {
@@ -191,7 +199,7 @@ export function DashboardPage() {
         <MetricCard
           label='総資産'
           value={analysisMonth ? formatCurrency(getTotalAssetsForMonth(state, analysisMonth)) : '--'}
-          note={analysisMonth ? '最新確定月の集計値' : '確定済み月がありません'}
+          note={analysisMonth ? '通常資産合計と投資評価額合計の合計' : '確定済み月がありません'}
         />
         <MetricCard
           label='月次収入'
@@ -212,8 +220,8 @@ export function DashboardPage() {
 
       <section className='grid gap-6 lg:grid-cols-[1fr_1fr]'>
         <Card
-          title='最新の資産サマリーカード'
-          description='最新確定月の資産状況と、集計の内訳を確認する領域です。'
+          title='総資産サマリーカード'
+          description='最新確定月の総資産と、その内訳を確認する領域です。総資産は通常資産合計と投資評価額合計の合計です。'
           action={analysisMonth ? <Pill>{formatMonthLabel(analysisMonth)}</Pill> : undefined}
         >
           {analysisMonth && settings ? (
@@ -221,9 +229,10 @@ export function DashboardPage() {
               <InfoList
                 rows={[
                   { label: '総資産', value: formatCurrency(getTotalAssetsForMonth(state, analysisMonth)), emphasize: true },
+                  { label: '通常資産合計', value: formatCurrency(regularAssetsTotal) },
+                  { label: '投資評価額合計', value: formatCurrency(getTotalInvestmentValuationForMonth(state, analysisMonth)) },
                   { label: '収入', value: formatCurrency(getTotalIncomeForMonth(state, analysisMonth)) },
                   { label: '支出', value: formatCurrency(getResolvedExpense(state, analysisMonth)) },
-                  { label: '投資評価額合計', value: formatCurrency(getTotalInvestmentValuationForMonth(state, analysisMonth)) },
                   { label: '生活防衛資金', value: formatCurrency(settings.emergencyFund) },
                 ]}
               />
@@ -231,7 +240,7 @@ export function DashboardPage() {
                 <div className='flex items-center justify-between gap-3'>
                   <div>
                     <div className='text-sm font-semibold text-ink'>通常資産一覧</div>
-                    <div className='mt-1 text-xs text-ink/45'>影響の大きい上位3件を表示しています。</div>
+                    <div className='mt-1 text-xs text-ink/45'>総資産の内訳に占める影響が大きい通常資産の上位3件を表示しています。</div>
                   </div>
                   <div className='flex items-center gap-2'>
                     <Pill tone='neutral'>{topAssetSummaryRows.length} / {assetSummaryRows.length}件</Pill>
@@ -253,7 +262,7 @@ export function DashboardPage() {
                               {asset.isLiability ? <Pill tone='warning'>負債</Pill> : null}
                             </div>
                             <div className='mt-1 text-xs text-ink/45'>
-                              {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                              {asset.ratio === null ? '総資産内比率 --' : `総資産内比率 ${formatPercent(asset.ratio)}`}
                             </div>
                           </div>
                           <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>
@@ -501,7 +510,7 @@ export function DashboardPage() {
         open={assetListOpen}
         onClose={() => setAssetListOpen(false)}
         title='通常資産一覧'
-        description='最新確定月の通常資産を、評価額の絶対値が大きい順に一覧表示します。'
+        description='最新確定月の通常資産を、評価額の絶対値が大きい順に一覧表示します。投資先はこの一覧に含めません。'
         className='max-w-2xl'
       >
         <div className='grid max-h-[60vh] gap-3 overflow-y-auto pr-1'>
@@ -514,7 +523,7 @@ export function DashboardPage() {
                     {asset.isLiability ? <Pill tone='warning'>負債</Pill> : null}
                   </div>
                   <div className='mt-1 text-xs text-ink/45'>
-                    {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                    {asset.ratio === null ? '総資産内比率 --' : `総資産内比率 ${formatPercent(asset.ratio)}`}
                   </div>
                 </div>
                 <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>

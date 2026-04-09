@@ -49,6 +49,7 @@
 - `monthly_records.expense_final_yen` には、支出推定/補正後に採用された最終確定値のみを保存する。
 - `monthly_records` は月次確定時にアプリケーション側で次月分を自動生成する前提とする。
 - 生活防衛資金と投資先配分は、同じ有効開始月を持つ `settings_revisions` と `settings_revision_target_allocations` の組で1つの設定改定として扱う。
+- 総資産はDBに独立カラムとして保持せず、`monthly_asset_values` の合計と `monthly_investment_valuations` の合計から導出する。
 
 ### 1.8 表示順・重複・金額制約方針
 - 資産・収入・投資先の表示順は `created_at` 順を基準にする。
