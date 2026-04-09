@@ -296,6 +296,9 @@
 ## 3. ダッシュボードAPI
 ### 3.1 `GET /dashboard`
 - **説明**: ダッシュボード上段カード群と、各カードの表示に必要な集約データを取得する。
+- **補足**:
+  - `asset_summary.regular_assets_total_yen` は通常資産合計を表し、`kpis.total_assets_yen` は通常資産合計と投資評価額合計の合算値を表す。
+  - `investment_decision.allocations` は、最新確定月の投資評価額を基準に、投資後の理想評価額へ不足分を寄せるリバランス方向の配分結果を返す。
 - **レスポンス例** (`200`):
 ```json
 {
@@ -351,6 +354,8 @@
         {
           "investment_target_id": 1,
           "name": "eMAXIS Slim 全世界株式",
+          "target_ratio_percent": 50.00,
+          "current_valuation_yen": 753750,
           "allocated_amount_yen": 35000
         }
       ]
@@ -416,6 +421,7 @@
 ## 4. 月次記録API
 ### 4.1 `GET /monthly-records`
 - **説明**: 管理中の月一覧と初期表示情報を取得する。
+- **補足**: `months` は月次記録画面の年月プルダウン選択肢と、前月/翌月移動の基準データとして使用する。
 - **レスポンス例** (`200`):
 ```json
 {
