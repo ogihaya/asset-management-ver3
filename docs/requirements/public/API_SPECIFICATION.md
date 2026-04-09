@@ -426,7 +426,11 @@
     "resolved_expense_yen": null,
     "expense_estimate_yen": 255000,
     "can_confirm": false,
+    "confirm_error_code": "VALIDATION_ERROR",
     "confirm_error": "資産に未入力があります。",
+    "confirm_error_details": {
+      "categories": ["assets"]
+    },
     "assets": [
       {
         "asset_id": 1,
@@ -501,6 +505,19 @@
   - `value_yen` は負値を許容する。
   - 名称変更は選択月から将来へ反映する。
   - 即保存APIとして扱う。
+- **レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "asset_id": 1,
+    "name": "住信SBIネット銀行",
+    "value_yen": 1250000
+  },
+  "meta": {
+    "message": "資産を更新しました。"
+  }
+}
+```
 
 ### 4.5 `DELETE /monthly-records/{month}/assets/{asset_id}`
 - **説明**: 資産を削除し、次の未確定月から非表示にする。
@@ -508,7 +525,8 @@
 ```json
 {
   "data": {
-    "deleted": true
+    "deleted": true,
+    "effective_from_month": "2026-05"
   },
   "meta": {
     "message": "資産を削除しました。"
@@ -522,7 +540,8 @@
 ```json
 {
   "data": {
-    "restored": true
+    "restored": true,
+    "effective_from_month": "2026-05"
   },
   "meta": {
     "message": "資産を復活しました。"
@@ -536,6 +555,18 @@
 ```json
 {
   "name": "給与"
+}
+```
+- **レスポンス例** (`201`):
+```json
+{
+  "data": {
+    "income_id": 1,
+    "name": "給与"
+  },
+  "meta": {
+    "message": "収入明細を追加しました。"
+  }
 }
 ```
 - **主要エラー**:
@@ -553,6 +584,19 @@
 - **補足**:
   - 名称変更は選択月から将来へ反映する。
   - `value_yen` は0以上とする。
+- **レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "income_id": 1,
+    "name": "給与",
+    "value_yen": 350000
+  },
+  "meta": {
+    "message": "収入明細を更新しました。"
+  }
+}
+```
 
 ### 4.9 `DELETE /monthly-records/{month}/incomes/{income_id}`
 - **説明**: 収入明細を削除し、選択月から将来へ非表示にする。
@@ -560,7 +604,8 @@
 ```json
 {
   "data": {
-    "deleted": true
+    "deleted": true,
+    "effective_from_month": "2026-04"
   },
   "meta": {
     "message": "収入明細を削除しました。"
@@ -579,6 +624,19 @@
 - **補足**:
   - `value_yen` は0以上とする。
   - 投資先未設定の場合、本APIは呼ばれない想定とする。
+- **レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "investment_target_id": 1,
+    "name": "eMAXIS Slim 全世界株式",
+    "value_yen": 753750
+  },
+  "meta": {
+    "message": "投資評価額を更新しました。"
+  }
+}
+```
 
 ### 4.11 `POST /monthly-records/{month}/confirm`
 - **説明**: 支出補正後の値で対象月を確定する。
@@ -596,6 +654,30 @@
   - `409 MONTH_NOT_CONFIRMABLE`: 古い未確定月がある
   - `409 VALIDATION_ERROR`: 資産/収入/投資評価額に未入力あり
   - `403 FORBIDDEN`: 既に確定済み
+- **エラー例** (`409 VALIDATION_ERROR`):
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "未入力の項目があります。",
+    "details": {
+      "categories": ["assets", "investment_valuations"]
+    }
+  }
+}
+```
+- **エラー例** (`409 MONTH_NOT_CONFIRMABLE`):
+```json
+{
+  "error": {
+    "code": "MONTH_NOT_CONFIRMABLE",
+    "message": "先に古い未確定月を確定してください。",
+    "details": {
+      "first_unconfirmed_month": "2026-03"
+    }
+  }
+}
+```
 
 ## 5. ライフプランAPI
 ### 5.1 `GET /life-plans`
@@ -689,6 +771,18 @@
 ```json
 {
   "emergency_fund_yen": 1000000
+}
+```
+- **レスポンス例** (`200`):
+```json
+{
+  "data": {
+    "effective_from_month": "2026-05",
+    "emergency_fund_yen": 1000000
+  },
+  "meta": {
+    "message": "生活防衛資金を保存しました。"
+  }
 }
 ```
 - **補足**:
