@@ -355,6 +355,7 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
       cumulativeIncome: 0,
       cumulativeExpense: 0,
       surplusAssets: 0,
+      emergencyFund: settings.emergencyFund,
       investableAmount: 0,
       allocations: [],
     };
@@ -400,6 +401,7 @@ export function getInvestmentComputation(state: AppState, month: MonthKey): Inve
     cumulativeIncome: selected.cumulativeIncome,
     cumulativeExpense: selected.cumulativeExpense,
     surplusAssets: selected.surplusAssets,
+    emergencyFund: settings.emergencyFund,
     investableAmount: selected.investableAmount,
     allocations: allocate(selected.investableAmount, targets),
   };

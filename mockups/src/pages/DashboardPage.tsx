@@ -233,7 +233,6 @@ export function DashboardPage() {
                   { label: '投資評価額合計', value: formatCurrency(getTotalInvestmentValuationForMonth(state, analysisMonth)) },
                   { label: '収入', value: formatCurrency(getTotalIncomeForMonth(state, analysisMonth)) },
                   { label: '支出', value: formatCurrency(getResolvedExpense(state, analysisMonth)) },
-                  { label: '生活防衛資金', value: formatCurrency(settings.emergencyFund) },
                 ]}
               />
               <div className='rounded-[24px] bg-cloud/60 p-5'>
@@ -396,6 +395,7 @@ export function DashboardPage() {
                       { label: '累積収入', value: formatCurrency(investment.cumulativeIncome) },
                       { label: '累積支出', value: formatCurrency(investment.cumulativeExpense) },
                       { label: '余力資産', value: formatCurrency(investment.surplusAssets) },
+                      { label: '生活防衛資金', value: formatCurrency(investment.emergencyFund) },
                       {
                         label: '制約イベント',
                         value: investment.targetEvent ? `${formatMonthLabel(investment.targetEvent.month)} / ${investment.targetEvent.title}` : '未設定',
