@@ -406,27 +406,6 @@ export function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className='mt-5 rounded-[24px] bg-white/75 p-4'>
-                    <div className='text-sm font-semibold text-ink'>配分結果</div>
-                    <div className='mt-3 space-y-3'>
-                      {investment.allocations.map((allocation) => (
-                        <div key={allocation.targetId} className='rounded-[20px] bg-cloud/45 px-4 py-4 text-sm'>
-                          <div className='flex items-start justify-between gap-4'>
-                            <div>
-                              <div className='font-medium text-ink'>{allocation.targetName}</div>
-                              <div className='mt-1 text-xs text-ink/45'>理想比率 {formatPercent(allocation.ratio)}</div>
-                            </div>
-                            <div className='text-right'>
-                              <div className='text-xs text-ink/45'>今回の配分額</div>
-                              <div className='mt-1 font-semibold text-ink'>{allocation.amount === 0 ? '0円（今回は見送り）' : formatCurrency(allocation.amount)}</div>
-                            </div>
-                          </div>
-                          <div className='mt-3 text-xs text-ink/50'>現在評価額 {formatCurrency(allocation.currentValuation)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
                   <div className='mt-5 rounded-[24px] bg-soft p-5'>
                     <div className='mb-3 text-sm font-semibold text-ink'>将来収支予測</div>
                     <InfoList
