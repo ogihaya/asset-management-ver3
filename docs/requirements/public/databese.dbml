@@ -9,6 +9,11 @@
 // duplicate names at the same effective timing, and allocation total = 100.00
 // are enforced by the application layer.
 // Missing monthly value rows mean "not entered yet", so 0 and blank can be distinguished.
+// Investment computation results are not persisted; they are recalculated from confirmed inputs.
+// Deleted user emails are not reusable because users.email stays globally unique.
+// monthly_records are created by the application when a month is confirmed and the next month is prepared.
+// expense_final_yen stores only the final confirmed monthly expense.
+// settings_revisions and settings_revision_target_allocations together represent one effective settings revision.
 
 Table users {
   id int [pk, increment]
