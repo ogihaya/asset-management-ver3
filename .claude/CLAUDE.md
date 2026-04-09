@@ -2,7 +2,6 @@
 
 ## Language Preferences
 
-- **Code and Documentation:** Write in English
 - **Comments and Responses:** Always use Japanese (日本語) when communicating with the user, adding comments to code, or providing explanations
 
 ## Project Rules

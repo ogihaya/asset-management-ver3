@@ -68,6 +68,32 @@ export function DashboardPage() {
     },
     [analysisMonth, state],
   );
+  const assetSummaryRows = useMemo(
+    function () {
+      if (!analysisMonth) {
+        return [];
+      }
+
+      const totalAssets = getTotalAssetsForMonth(state, analysisMonth);
+
+      return [...visibleAssets]
+        .sort(function (left, right) {
+          return (right.value ?? 0) - (left.value ?? 0);
+        })
+        .map(function (asset) {
+          const ratio =
+            asset.value === null || totalAssets === 0
+              ? null
+              : Number(((asset.value / totalAssets) * 100).toFixed(2));
+
+          return {
+            ...asset,
+            ratio,
+          };
+        });
+    },
+    [analysisMonth, state, visibleAssets],
+  );
   const settings = analysisMonth ? getSettingsForMonth(state, analysisMonth) : null;
   const investment = analysisMonth ? getInvestmentComputation(state, analysisMonth) : null;
   const forecast = analysisMonth ? getForecastSummary(state, analysisMonth) : null;
@@ -123,7 +149,7 @@ export function DashboardPage() {
           action={analysisMonth ? <Pill>{formatMonthLabel(analysisMonth)}</Pill> : undefined}
         >
           {analysisMonth && settings ? (
-            <div className='grid gap-6 lg:grid-cols-[1fr_0.9fr]'>
+            <div className='grid gap-6 lg:grid-cols-[0.92fr_1.08fr]'>
               <InfoList
                 rows={[
                   { label: '総資産', value: formatCurrency(getTotalAssetsForMonth(state, analysisMonth)), emphasize: true },
@@ -134,22 +160,32 @@ export function DashboardPage() {
                 ]}
               />
               <div className='rounded-[24px] bg-cloud/60 p-5'>
-                <div className='text-sm font-semibold text-ink'>集計補足</div>
-                <div className='mt-4'>
-                  <InfoList
-                    rows={[
-                      {
-                        label: '通常資産評価額',
-                        value: formatCurrency(
-                          visibleAssets.reduce(function (sum, asset) {
-                            return sum + (asset.value ?? 0);
-                          }, 0),
-                        ),
-                      },
-                      { label: '投資評価額', value: formatCurrency(getTotalInvestmentValuationForMonth(state, analysisMonth)) },
-                      { label: '基準月', value: formatMonthLabel(analysisMonth) },
-                    ]}
-                  />
+                <div className='flex items-center justify-between gap-3'>
+                  <div className='text-sm font-semibold text-ink'>通常資産一覧</div>
+                  <Pill tone='neutral'>{assetSummaryRows.length}件</Pill>
+                </div>
+                <div className='mt-4 grid gap-3'>
+                  {assetSummaryRows.map((asset) => (
+                    <div key={asset.id} className='rounded-[20px] bg-white/75 px-4 py-4 text-sm'>
+                      <div className='flex items-start justify-between gap-4'>
+                        <div className='min-w-0'>
+                          <div className='truncate font-medium text-ink'>{asset.name}</div>
+                          <div className='mt-1 text-xs text-ink/45'>
+                            {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                          </div>
+                        </div>
+                        <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>
+                      </div>
+                      {asset.ratio !== null ? (
+                        <div className='mt-3 h-2 overflow-hidden rounded-full bg-ink/8'>
+                          <div
+                            className={asset.ratio >= 0 ? 'h-full rounded-full bg-pine/80' : 'h-full rounded-full bg-amber/80'}
+                            style={{ width: `${Math.min(Math.abs(asset.ratio), 100)}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
