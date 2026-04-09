@@ -202,6 +202,38 @@ export function getResolvedExpense(state: AppState, month: MonthKey): number | n
   return record.expenseOverride ?? getExpenseEstimate(state, month);
 }
 
+function getMissingMonthlyInputs(state: AppState, month: MonthKey): string[] {
+  const record = getRecord(state, month);
+  if (!record) {
+    return [];
+  }
+
+  const missing: string[] = [];
+
+  const hasMissingAssets = getVisibleAssets(state, month).some(function (asset) {
+    return record.assetValues[asset.id] === null || record.assetValues[asset.id] === undefined;
+  });
+  if (hasMissingAssets) {
+    missing.push('資産');
+  }
+
+  const hasMissingIncomes = getVisibleIncomes(state, month).some(function (income) {
+    return record.incomeValues[income.id] === null || record.incomeValues[income.id] === undefined;
+  });
+  if (hasMissingIncomes) {
+    missing.push('収入');
+  }
+
+  const hasMissingInvestments = getTargetsForMonth(state, month).some(function (target) {
+    return record.investmentValuations[target.id] === null || record.investmentValuations[target.id] === undefined;
+  });
+  if (hasMissingInvestments) {
+    missing.push('投資評価額');
+  }
+
+  return missing;
+}
+
 export function getConfirmability(state: AppState, month: MonthKey): { canConfirm: boolean; reason?: string } {
   const record = getRecord(state, month);
   if (!record) {
@@ -217,6 +249,14 @@ export function getConfirmability(state: AppState, month: MonthKey): { canConfir
     return {
       canConfirm: false,
       reason: `古い未確定月から順に確定する必要があります。まずは ${firstUnconfirmed} を確定してください。`,
+    };
+  }
+
+  const missingInputs = getMissingMonthlyInputs(state, month);
+  if (missingInputs.length > 0) {
+    return {
+      canConfirm: false,
+      reason: `未入力の項目があります。${missingInputs.join('、')}をすべて入力してください。`,
     };
   }
 

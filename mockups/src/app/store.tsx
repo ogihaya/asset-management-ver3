@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getFirstUnconfirmedMonth, getLatestDataMonth, getSettingsForMonth } from '../lib/calculations';
+import { getConfirmability, getFirstUnconfirmedMonth, getLatestDataMonth, getSettingsForMonth } from '../lib/calculations';
 import { addMonths, compareMonths } from '../lib/months';
 import { createSeedState } from '../mock-data/seed';
 import type { AppState, InvestmentTarget, LifePlanEvent, MonthKey, ToastMessage } from '../types';
@@ -428,9 +428,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const confirmMonth = useCallback(function (month: MonthKey, override: number | null) {
     let succeeded = false;
     setState(function (current) {
-      const firstUnconfirmed = getFirstUnconfirmedMonth(current);
-      if (firstUnconfirmed && firstUnconfirmed !== month) {
-        return withToast(current, 'warning', '古い未確定月から順に確定してください。');
+      const confirmability = getConfirmability(current, month);
+      if (confirmability.canConfirm === false) {
+        return withToast(current, 'warning', confirmability.reason ?? '月次を確定できません。');
       }
 
       const next = cloneState(current);

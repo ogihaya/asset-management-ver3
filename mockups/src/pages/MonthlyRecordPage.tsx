@@ -124,7 +124,7 @@ export function MonthlyRecordPage() {
   }
 
   function openConfirmModal() {
-    if (!record) {
+    if (!record || confirmability.canConfirm === false) {
       return;
     }
     setConfirmOverride(record.expenseOverride === null ? estimate === null ? '' : String(estimate) : String(record.expenseOverride));
@@ -379,7 +379,7 @@ export function MonthlyRecordPage() {
         footer={
           <>
             <Button type='button' variant='secondary' onClick={() => setConfirmOpen(false)}>キャンセル</Button>
-            <Button type='button' onClick={submitConfirm} disabled={estimate === null && toNumber(confirmOverride) === null}>確定する</Button>
+            <Button type='button' onClick={submitConfirm} disabled={confirmability.canConfirm === false || (estimate === null && toNumber(confirmOverride) === null)}>確定する</Button>
           </>
         }
       >

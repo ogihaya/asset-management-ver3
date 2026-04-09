@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AuthenticatedShell } from '../components/layout';
 import { AllocationPieChart, AssetTrendChart } from '../components/charts';
-import { Card, EmptyState, InfoList, MetricCard, Pill } from '../components/ui';
+import { Button, Card, EmptyState, InfoList, MetricCard, Modal, Pill } from '../components/ui';
 import { useAppStore } from '../app/store';
 import {
   buildTrendData,
@@ -61,6 +61,7 @@ export function DashboardPage() {
   const analysisMonth = getLatestConfirmedMonth(state);
   const [subject, setSubject] = useState('total-assets');
   const [range, setRange] = useState<'3' | '6' | '12' | 'all'>('6');
+  const [assetListOpen, setAssetListOpen] = useState(false);
 
   const visibleAssets = useMemo(
     function () {
@@ -78,7 +79,7 @@ export function DashboardPage() {
 
       return [...visibleAssets]
         .sort(function (left, right) {
-          return (right.value ?? 0) - (left.value ?? 0);
+          return Math.abs(right.value ?? 0) - Math.abs(left.value ?? 0);
         })
         .map(function (asset) {
           const ratio =
@@ -93,6 +94,12 @@ export function DashboardPage() {
         });
     },
     [analysisMonth, state, visibleAssets],
+  );
+  const topAssetSummaryRows = useMemo(
+    function () {
+      return assetSummaryRows.slice(0, 3);
+    },
+    [assetSummaryRows],
   );
   const settings = analysisMonth ? getSettingsForMonth(state, analysisMonth) : null;
   const investment = analysisMonth ? getInvestmentComputation(state, analysisMonth) : null;
@@ -161,31 +168,52 @@ export function DashboardPage() {
               />
               <div className='rounded-[24px] bg-cloud/60 p-5'>
                 <div className='flex items-center justify-between gap-3'>
-                  <div className='text-sm font-semibold text-ink'>通常資産一覧</div>
-                  <Pill tone='neutral'>{assetSummaryRows.length}件</Pill>
+                  <div>
+                    <div className='text-sm font-semibold text-ink'>通常資産一覧</div>
+                    <div className='mt-1 text-xs text-ink/45'>影響の大きい上位3件を表示しています。</div>
+                  </div>
+                  <div className='flex items-center gap-2'>
+                    <Pill tone='neutral'>{topAssetSummaryRows.length} / {assetSummaryRows.length}件</Pill>
+                    {assetSummaryRows.length > 3 ? (
+                      <Button type='button' variant='ghost' onClick={() => setAssetListOpen(true)}>
+                        すべて見る
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <div className='mt-4 grid gap-3'>
-                  {assetSummaryRows.map((asset) => (
-                    <div key={asset.id} className='rounded-[20px] bg-white/75 px-4 py-4 text-sm'>
-                      <div className='flex items-start justify-between gap-4'>
-                        <div className='min-w-0'>
-                          <div className='truncate font-medium text-ink'>{asset.name}</div>
-                          <div className='mt-1 text-xs text-ink/45'>
-                            {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                  {topAssetSummaryRows.length > 0 ? (
+                    topAssetSummaryRows.map((asset) => (
+                      <div key={asset.id} className='rounded-[20px] bg-white/75 px-4 py-4 text-sm'>
+                        <div className='flex items-start justify-between gap-4'>
+                          <div className='min-w-0'>
+                            <div className='truncate font-medium text-ink'>{asset.name}</div>
+                            <div className='mt-1 text-xs text-ink/45'>
+                              {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                            </div>
                           </div>
+                          <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>
                         </div>
-                        <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>
+                        {asset.ratio !== null ? (
+                          <div className='mt-3 h-2 overflow-hidden rounded-full bg-ink/8'>
+                            <div
+                              className={asset.ratio >= 0 ? 'h-full rounded-full bg-pine/80' : 'h-full rounded-full bg-amber/80'}
+                              style={{ width: `${Math.min(Math.abs(asset.ratio), 100)}%` }}
+                            />
+                          </div>
+                        ) : null}
                       </div>
-                      {asset.ratio !== null ? (
-                        <div className='mt-3 h-2 overflow-hidden rounded-full bg-ink/8'>
-                          <div
-                            className={asset.ratio >= 0 ? 'h-full rounded-full bg-pine/80' : 'h-full rounded-full bg-amber/80'}
-                            style={{ width: `${Math.min(Math.abs(asset.ratio), 100)}%` }}
-                          />
-                        </div>
-                      ) : null}
+                    ))
+                  ) : (
+                    <div className='rounded-[20px] bg-white/75 px-4 py-4 text-sm text-ink/60'>
+                      表示対象の通常資産はありません。
                     </div>
-                  ))}
+                  )}
+                  {assetSummaryRows.length > 3 ? (
+                    <div className='rounded-[20px] border border-dashed border-ink/15 bg-white/55 px-4 py-4 text-sm text-ink/60'>
+                      残り {assetSummaryRows.length - 3} 件の通常資産があります。必要に応じて「すべて見る」で確認してください。
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -386,6 +414,38 @@ export function DashboardPage() {
           )}
         </div>
       </Card>
+
+      <Modal
+        open={assetListOpen}
+        onClose={() => setAssetListOpen(false)}
+        title='通常資産一覧'
+        description='最新確定月の通常資産を、評価額の絶対値が大きい順に一覧表示します。'
+        className='max-w-2xl'
+      >
+        <div className='grid gap-3'>
+          {assetSummaryRows.map((asset) => (
+            <div key={asset.id} className='rounded-[20px] bg-cloud/45 px-4 py-4 text-sm'>
+              <div className='flex items-start justify-between gap-4'>
+                <div className='min-w-0'>
+                  <div className='truncate font-medium text-ink'>{asset.name}</div>
+                  <div className='mt-1 text-xs text-ink/45'>
+                    {asset.ratio === null ? '総資産比率 --' : `総資産比率 ${formatPercent(asset.ratio)}`}
+                  </div>
+                </div>
+                <div className='shrink-0 text-right font-semibold text-ink'>{formatCurrency(asset.value)}</div>
+              </div>
+              {asset.ratio !== null ? (
+                <div className='mt-3 h-2 overflow-hidden rounded-full bg-ink/8'>
+                  <div
+                    className={asset.ratio >= 0 ? 'h-full rounded-full bg-pine/80' : 'h-full rounded-full bg-amber/80'}
+                    style={{ width: `${Math.min(Math.abs(asset.ratio), 100)}%` }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      </Modal>
     </AuthenticatedShell>
   );
 }
