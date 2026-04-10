@@ -5,7 +5,9 @@ from logging.config import fileConfig
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 
+import app.infrastructure.db.models  # noqa: F401
 from alembic import context
+from app.infrastructure.db.models import Base
 
 load_dotenv()
 
@@ -53,15 +55,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 
-# -------- 実装出来次第、下記にモデルをインポートしていく。-----------
-# from app.infrastructure.database import Base
-
-
-# ------------------------------------------------------------
-
-
-# target_metadata = Base.metadata # 後でコメントアウトを外す
-target_metadata = None
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
