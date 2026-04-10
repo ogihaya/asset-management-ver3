@@ -14,20 +14,17 @@
 
 | ファイル | トリガー | 内容 |
 |---------|---------|------|
-| `deploy-auto.yml` | develop/main へのpush | 自動デプロイ（承認なし） |
-| `deploy-manual.yml` | develop/main へのpush | 手動承認デプロイ |
+| `deploy-manual.yml` | `workflow_dispatch` | 手動実行 + 手動承認デプロイ |
 | `update-swagger.yml` | main の `backend/app/presentation/**` 変更時 | Swagger自動更新 |
 
-**注意**: `deploy-auto.yml` と `deploy-manual.yml` はどちらか一方のみ有効化すること。
+`deploy-auto.yml` は自動デプロイ停止のため `.github/workflows-disabled/deploy-auto.yml` へ退避済みです。
+現在の active なデプロイ workflow は `deploy-manual.yml` のみです。
 
 ---
 
 ## デプロイフロー
 
-```
-develop → staging環境
-main    → production環境
-```
+`workflow_dispatch` 実行時に `environment` 入力で `stg` / `prod` を選択します。
 
 ```
 detect-changes → deploy-infra → deploy-backend → migrate-database

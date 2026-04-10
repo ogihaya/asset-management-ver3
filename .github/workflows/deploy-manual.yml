@@ -1,27 +1,17 @@
 name: Deploy (Manual Approval)
 
-# 手動承認付きデプロイフロー
-# GitHub Environmentsの承認機能を使用
-# - developブランチ → Staging環境 (要承認)
-# - mainブランチ → Production環境 (要承認)
+# 手動実行専用の承認付きデプロイフロー
+# GitHub Actions の workflow_dispatch と
+# GitHub Environments の承認機能を使用
 #
 # デプロイ順序:
-# 1. 差分検出 (detect-changes)
+# 1. デプロイ文脈準備 (detect-changes)
 # 2. インフラデプロイ (CDK) - 承認後
 # 3. バックエンドデプロイ (ECS)
 # 4. DBマイグレーション (Alembic)
 
 on:
-  push:
-    branches:
-      - develop  # Staging環境へデプロイ (要承認)
-      - main     # Production環境へデプロイ (要承認)
-    paths:
-      - 'infra/**'
-      - 'backend/**'
-      - '.github/workflows/deploy-manual.yml'
-
-  workflow_dispatch:  # 手動実行も可能
+  workflow_dispatch:
     inputs:
       environment:
         description: 'デプロイ先環境'
@@ -56,7 +46,7 @@ on:
 
 # 同時実行制御: 同じ環境への同時デプロイを防止
 concurrency:
-  group: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}-deployment-manual
+  group: ${{ github.event.inputs.environment == 'prod' && 'production' || 'staging' }}-deployment-manual
   cancel-in-progress: false
 
 env:
@@ -66,49 +56,23 @@ env:
 
 jobs:
   # ========================================
-  # Job 0: 変更検出と環境判定
+  # Job 0: デプロイ文脈の準備
   # ========================================
   detect-changes:
-    name: Detect Changes
+    name: Prepare Deployment Context
     runs-on: ubuntu-latest
     outputs:
-      infra: ${{ steps.filter.outputs.infra }}
-      backend: ${{ steps.filter.outputs.backend }}
       env_name: ${{ steps.set-env.outputs.env_name }}
       env_display: ${{ steps.set-env.outputs.env_display }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
       - name: Set environment variables
         id: set-env
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ENV_NAME="${{ github.event.inputs.environment }}"
-          else
-            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-              ENV_NAME="prod"
-            else
-              ENV_NAME="stg"
-            fi
-          fi
+          ENV_NAME="${{ github.event.inputs.environment }}"
           echo "env_name=${ENV_NAME}" >> $GITHUB_OUTPUT
           ENV_DISPLAY=$(echo "${ENV_NAME}" | tr '[:lower:]' '[:upper:]')
           echo "env_display=${ENV_DISPLAY}" >> $GITHUB_OUTPUT
-
-      - name: Check changed files
-        uses: dorny/paths-filter@v3
-        id: filter
-        if: github.event_name == 'push'
-        with:
-          filters: |
-            infra:
-              - 'infra/**'
-              - '.github/workflows/deploy-manual.yml'
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy-manual.yml'
 
       - name: Display deployment info
         run: |
@@ -132,10 +96,7 @@ jobs:
     needs: [detect-changes]
     if: |
       always() &&
-      (
-        (github.event_name == 'push' && needs.detect-changes.outputs.infra == 'true') ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'backend-only')
-      )
+      github.event.inputs.deploy_target != 'backend-only'
 
     # GitHub Environmentsの承認機能を使用
     environment:
@@ -292,10 +253,7 @@ jobs:
     if: |
       always() &&
       (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') &&
-      (
-        (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true' || needs.deploy-infra.outputs.infra_deployed == 'true')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'infra-only')
-      )
+      github.event.inputs.deploy_target != 'infra-only'
 
     permissions:
       id-token: write
@@ -442,10 +400,7 @@ jobs:
     if: |
       always() &&
       (needs.deploy-backend.result == 'success' || needs.deploy-backend.result == 'skipped') &&
-      (
-        (github.event_name == 'push' && (needs.detect-changes.outputs.backend == 'true' || needs.deploy-infra.outputs.infra_deployed == 'true' || needs.deploy-backend.outputs.backend_deployed == 'true')) ||
-        (github.event_name == 'workflow_dispatch' && github.event.inputs.deploy_target != 'infra-only')
-      )
+      github.event.inputs.deploy_target != 'infra-only'
 
     permissions:
       id-token: write
