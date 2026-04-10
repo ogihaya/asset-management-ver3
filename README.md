@@ -45,7 +45,13 @@
 - **フロントエンド**: http://localhost:3000
 - **バックエンド API**: http://localhost:8000
 - **Swagger UI**: http://localhost:8000/docs
-- **pgAdmin**: http://localhost:5050
+- **PostgreSQL**: localhost:55432
+- **pgAdmin**: http://localhost:58080
+
+Docker 開発環境は `make up` / `make down` などの `make` 経由を正とします。  
+このリポジトリでは `Makefile` 側で Compose project 名を固定しているため、`docker compose up` を直接叩く運用は前提にしません。
+
+テンプレート由来の旧 `db_data/` が手元に残っていても、このリポジトリの PostgreSQL 永続化先は `db_data_asset_management/` を使います。
 
 ### 開発環境のセットアップ
 
