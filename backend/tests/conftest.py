@@ -5,13 +5,42 @@ from collections.abc import Generator
 from unittest.mock import MagicMock
 
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+import app.infrastructure.db.models  # noqa: F401
 from app.application.interfaces.security_service import ISecurityService
 from app.domain.repositories.user_repository import IUserRepository
 from app.infrastructure.db.models.base import Base
+
+
+def _ensure_test_settings_env() -> None:
+    """テストに必要な最低限の設定値を環境変数へ投入"""
+    os.environ.setdefault('POSTGRES_USER', 'test_user')
+    os.environ.setdefault('POSTGRES_PASSWORD', 'test_password')
+    os.environ.setdefault('POSTGRES_DB', 'test_db')
+    os.environ.setdefault('POSTGRES_HOST', 'localhost')
+    os.environ.setdefault('POSTGRES_PORT', '5432')
+
+    if not os.getenv('JWT_PRIVATE_KEY') or not os.getenv('JWT_PUBLIC_KEY'):
+        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        public_key = private_key.public_key()
+
+        private_pem = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        public_pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+
+        os.environ['JWT_PRIVATE_KEY'] = private_pem.decode('utf-8').replace('\n', '\\n')
+        os.environ['JWT_PUBLIC_KEY'] = public_pem.decode('utf-8').replace('\n', '\\n')
 
 
 @pytest.fixture(scope='session')
@@ -59,6 +88,7 @@ def test_client() -> Generator[TestClient, None, None]:
     """FastAPI TestClient"""
     # テスト用に認証を無効化
     os.environ['ENABLE_AUTH'] = 'false'
+    _ensure_test_settings_env()
 
     # get_settings()のキャッシュをクリア
     from app.config import get_settings

@@ -1,16 +1,15 @@
-from pydantic import BaseModel, Field
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class User(BaseModel):
     """ユーザーエンティティ"""
 
+    model_config = ConfigDict(from_attributes=True)
+
     id: int = Field(..., description='ユーザーID')
-    login_id: str = Field(..., description='ログインID')
-    password: str = Field(..., description='ハッシュ化されたパスワード')
-    email: str | None = Field(None, description='メールアドレス')
+    email: str = Field(..., description='メールアドレス')
+    password_hash: str = Field(..., description='ハッシュ化されたパスワード')
     name: str | None = Field(None, description='ユーザー名')
-
-    class Config:
-        """Pydantic設定"""
-
-        from_attributes = True  # SQLAlchemyモデルから変換可能にする
+    deleted_at: datetime | None = Field(None, description='論理削除日時')

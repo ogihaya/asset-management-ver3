@@ -2,6 +2,8 @@
 
 import inspect
 
+import pytest
+
 from app.domain.repositories.user_repository import IUserRepository
 
 
@@ -12,10 +14,10 @@ class TestUserRepositoryInterface:
         """IUserRepositoryが抽象クラスであることを確認"""
         assert inspect.isabstract(IUserRepository)
 
-    def test_has_get_by_login_id_method(self):
-        """get_by_login_idメソッドが定義されている"""
-        assert hasattr(IUserRepository, 'get_by_login_id')
-        assert callable(IUserRepository.get_by_login_id)
+    def test_has_get_by_email_method(self):
+        """get_by_emailメソッドが定義されている"""
+        assert hasattr(IUserRepository, 'get_by_email')
+        assert callable(IUserRepository.get_by_email)
 
     def test_has_get_by_id_method(self):
         """get_by_idメソッドが定義されている"""
@@ -39,9 +41,9 @@ class TestUserRepositoryInterface:
 
     def test_method_signatures(self):
         """メソッドのシグネチャを確認"""
-        # get_by_login_id
-        sig = inspect.signature(IUserRepository.get_by_login_id)
-        assert 'login_id' in sig.parameters
+        # get_by_email
+        sig = inspect.signature(IUserRepository.get_by_email)
+        assert 'email' in sig.parameters
 
         # get_by_id
         sig = inspect.signature(IUserRepository.get_by_id)
@@ -61,9 +63,5 @@ class TestUserRepositoryInterface:
 
     def test_cannot_instantiate_directly(self):
         """抽象クラスは直接インスタンス化できない"""
-        try:
+        with pytest.raises(TypeError):
             IUserRepository()
-            assert False, 'Should not be able to instantiate abstract class'
-        except TypeError:
-            # 期待通り：抽象クラスはインスタンス化できない
-            pass

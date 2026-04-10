@@ -1,5 +1,8 @@
 .PHONY: help up down build logs test lint format db-migrate db-upgrade onion-check generate-rsa-keys
 
+COMPOSE_PROJECT_NAME ?= asset-management-ver3
+DOCKER_COMPOSE = COMPOSE_PROJECT_NAME=$(COMPOSE_PROJECT_NAME) docker compose
+
 help:
 	@echo "Docker:"
 	@echo "  make up        - 起動"
@@ -22,46 +25,46 @@ help:
 
 # Docker
 up:
-	docker compose up -d
+	$(DOCKER_COMPOSE) up -d
 
 down:
-	docker compose down
+	$(DOCKER_COMPOSE) down
 
 build:
-	docker compose build
+	$(DOCKER_COMPOSE) build
 
 logs:
-	docker compose logs -f
+	$(DOCKER_COMPOSE) logs -f
 
 # 開発
 test:
-	docker compose exec backend pytest -v
+	$(DOCKER_COMPOSE) exec backend pytest -v
 
 lint:
 	@echo "=== Backend Lint ==="
-	docker compose exec backend ruff check --fix .
+	$(DOCKER_COMPOSE) exec backend ruff check --fix .
 	@echo ""
 	@echo "=== Frontend Lint ==="
 	cd frontend && npm run lint
 
 format:
 	@echo "=== Backend Format ==="
-	docker compose exec backend ruff format .
+	$(DOCKER_COMPOSE) exec backend ruff format .
 	@echo ""
 	@echo "=== Frontend Format ==="
 	cd frontend && npm run format
 
 onion-check:
-	docker compose run --rm backend python scripts/check_onion_architecture.py
+	$(DOCKER_COMPOSE) run --rm backend python scripts/check_onion_architecture.py
 
 # DB
 db-migrate:
 	@if [ -z "$(msg)" ]; then echo "Usage: make db-migrate msg='message'"; exit 1; fi
-	docker compose run --rm migrator alembic revision --autogenerate -m "$(msg)"
+	$(DOCKER_COMPOSE) run --rm migrator alembic revision --autogenerate -m "$(msg)"
 
 db-upgrade:
-	docker compose run --rm migrator alembic upgrade head
+	$(DOCKER_COMPOSE) run --rm migrator alembic upgrade head
 
 # セキュリティ
 generate-rsa-keys:
-	docker compose exec backend python scripts/generate_rsa_keys.py
+	$(DOCKER_COMPOSE) exec backend python scripts/generate_rsa_keys.py

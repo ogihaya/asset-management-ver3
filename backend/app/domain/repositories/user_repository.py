@@ -7,12 +7,12 @@ class IUserRepository(ABC):
     """ユーザーリポジトリのインターフェース"""
 
     @abstractmethod
-    def get_by_login_id(self, login_id: str) -> User | None:
+    def get_by_email(self, email: str) -> User | None:
         """
-        ログインIDでユーザーを取得
+        メールアドレスでユーザーを取得
 
         Args:
-            login_id: ログインID
+            email: メールアドレス
 
         Returns:
             Optional[User]: ユーザーエンティティ（存在しない場合はNone）
@@ -61,12 +61,12 @@ class IUserRepository(ABC):
     @abstractmethod
     def delete(self, user_id: int) -> bool:
         """
-        ユーザーを削除
+        ユーザーを論理削除
 
         Args:
             user_id: ユーザーID
 
         Returns:
-            bool: 削除成功の場合True
+            bool: 論理削除成功の場合True
         """
         pass

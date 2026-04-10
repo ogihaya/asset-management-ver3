@@ -34,24 +34,22 @@ services:
 
   db:
     image: postgres:15
-    container_name: postgres_container_ai_solution
     env_file: ./backend/.env
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
     volumes:
       # データを永続化するためのボリュームをマウント
-      - ./db_data:/var/lib/postgresql/data
+      - ./db_data_asset_management:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U app_user -d ai_solution_db"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       timeout: 20s
       retries: 10
       interval: 5s
 
   pgadmin:
     image: dpage/pgadmin4
-    container_name: pgadmin_ai_solution
     ports:
-      - "8080:80"
+      - "${PGADMIN_HOST_PORT:-58080}:80"
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin
