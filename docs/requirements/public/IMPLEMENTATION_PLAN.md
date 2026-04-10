@@ -10,6 +10,11 @@
 - 実装順は MVP 順とし、認証、月次記録、設定、ライフプラン、ダッシュボードの順に完成度を高める。
 - 目標日は暦日ではなく `Day N` の相対日程で管理する。
 - v1 の対象は公開仕様に定義された範囲に限定し、通知、外部連携、エクスポート、バックアップは対象外とする。
+- 実装で迷いやすい論点は以下の別紙で補う。
+  - [AUTH_IMPLEMENTATION_DETAIL.md](./AUTH_IMPLEMENTATION_DETAIL.md)
+  - [MONTHLY_RULE_MATRIX.md](./MONTHLY_RULE_MATRIX.md)
+  - [DASHBOARD_CALC_TEST_CASES.md](./DASHBOARD_CALC_TEST_CASES.md)
+  - [FRONTEND_MIGRATION_MAP.md](./FRONTEND_MIGRATION_MAP.md)
 
 ## 1. アーキテクチャ概要
 
