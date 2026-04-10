@@ -45,6 +45,7 @@ ENV/
 
 # Database
 db_data/
+db_data_asset_management/
 *.db
 *.dbdiagram
 *.sqlite
