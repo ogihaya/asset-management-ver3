@@ -1,30 +1,37 @@
-// ログインリクエスト
+export interface User {
+  id: number;
+  email: string;
+  name?: string;
+}
+
 export interface LoginRequest {
-  login_id: string;
+  email: string;
   password: string;
 }
 
-// ログインレスポンス (バックエンド: POST /auth/login)
 export interface LoginResponse {
-  message: string;
-  access_token: string;
-  user_id: number;
+  data: {
+    user: User;
+  };
+  meta: {
+    message: string;
+    session_expires_in_days: number;
+  };
 }
 
-// ログアウトレスポンス (バックエンド: POST /auth/logout)
 export interface LogoutResponse {
-  message: string;
+  data: {
+    logged_out: boolean;
+  };
+  meta: {
+    message: string;
+  };
 }
 
-// 認証状態レスポンス (バックエンド: GET /auth/status)
 export interface StatusResponse {
-  is_authenticated: boolean;
-  user_id: number;
-}
-
-// ユーザー型
-export interface User {
-  id: number;
-  email?: string;
-  name?: string;
+  data: {
+    authenticated: boolean;
+    user: User | null;
+  };
+  meta: Record<string, never>;
 }

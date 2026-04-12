@@ -4,6 +4,29 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 // 認証機能の有効/無効
 const ENABLE_AUTH = process.env.NEXT_PUBLIC_ENABLE_AUTH !== 'false';
+const AUTH_STATUS_PATH = '/api/v1/auth/status';
+
+interface ApiErrorResponse {
+  error?: {
+    code?: string;
+  };
+}
+
+type SessionExpiredHandler = (() => void | Promise<void>) | null;
+
+let sessionExpiredHandler: SessionExpiredHandler = null;
+
+export function registerSessionExpiredHandler(handler: SessionExpiredHandler) {
+  sessionExpiredHandler = handler;
+}
+
+export function isSessionExpiredError(error: unknown): boolean {
+  return (
+    axios.isAxiosError<ApiErrorResponse>(error) &&
+    error.response?.status === 401 &&
+    error.response?.data?.error?.code === 'SESSION_EXPIRED'
+  );
+}
 
 // Axiosインスタンス作成
 const httpClient: AxiosInstance = axios.create({
@@ -40,14 +63,16 @@ httpClient.interceptors.response.use(
     if (error.response) {
       console.error('API Error:', error.response.status, error.response.data);
 
-      // 401エラー: 認証エラー時はログインページへリダイレクト（認証が有効な場合のみ）
-      if (error.response.status === 401 && ENABLE_AUTH) {
-        console.warn('Unauthorized. Redirecting to login...');
+      if (ENABLE_AUTH && isSessionExpiredError(error)) {
+        const isAuthStatusRequest =
+          error.config?.url?.includes(AUTH_STATUS_PATH) ?? false;
 
-        // /auth/status以外のエンドポイントで401エラーが発生した場合のみリダイレクト
-        const isAuthStatusRequest = error.config?.url?.includes('/auth/status');
-        if (!isAuthStatusRequest && typeof window !== 'undefined') {
-          window.location.href = '/login';
+        if (!isAuthStatusRequest && sessionExpiredHandler) {
+          void Promise.resolve(sessionExpiredHandler()).catch(
+            (handlerError: unknown) => {
+              console.error('Session expired handler failed:', handlerError);
+            },
+          );
         }
       }
     } else if (error.request) {

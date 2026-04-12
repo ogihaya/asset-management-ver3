@@ -6,7 +6,7 @@ import type { User } from './types';
  */
 export class UserEntity implements User {
   id: number;
-  email?: string;
+  email: string;
   name?: string;
 
   constructor(data: User) {
@@ -17,7 +17,7 @@ export class UserEntity implements User {
 
   // ユーザー名の取得（メールアドレスから生成など）
   getDisplayName(): string {
-    return this.name || this.email || `User ${this.id}`;
+    return this.name || this.email;
   }
 
   // DTOからエンティティへの変換

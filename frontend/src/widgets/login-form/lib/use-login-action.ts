@@ -11,7 +11,7 @@ export function useLoginAction() {
 
   return useLogin({
     onSuccess: (data) => {
-      dispatch(setUser({ id: data.user_id }));
+      dispatch(setUser(data.data.user));
       router.push('/dashboard');
     },
     onError: (error) => {

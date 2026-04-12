@@ -14,13 +14,13 @@ import {
 import { useLoginAction, type LoginFormData } from './lib/use-login-action';
 
 export function LoginForm() {
-  const [loginId, setLoginId] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const loginMutation = useLoginAction();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const credentials: LoginFormData = { loginId, password };
+    const credentials: LoginFormData = { email, password };
     loginMutation.mutate(credentials);
   };
 
@@ -33,13 +33,13 @@ export function LoginForm() {
       <CardContent>
         <form onSubmit={handleSubmit} className='space-y-4'>
           <div className='space-y-2'>
-            <Label htmlFor='loginId'>ログインID</Label>
+            <Label htmlFor='email'>メールアドレス</Label>
             <Input
-              id='loginId'
-              type='text'
-              placeholder='ログインIDを入力'
-              value={loginId}
-              onChange={(e) => setLoginId(e.target.value)}
+              id='email'
+              type='email'
+              placeholder='user@example.com'
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
@@ -56,7 +56,7 @@ export function LoginForm() {
 
           {loginMutation.isError && (
             <div className='rounded-md bg-destructive/15 p-3 text-sm text-destructive'>
-              ログインに失敗しました。ログインIDとパスワードを確認してください。
+              ログインに失敗しました。メールアドレスとパスワードを確認してください。
             </div>
           )}
 
