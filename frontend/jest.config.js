@@ -38,7 +38,7 @@ module.exports = async () => {
   const jestConfig = await createJestConfig(customJestConfig)();
   // MSW の ESM モジュールをトランスパイルするため transformIgnorePatterns を上書き
   jestConfig.transformIgnorePatterns = [
-    '/node_modules/(?!(msw|@mswjs|@bundled-es-modules|until-async)/)',
+    '/node_modules/(?!(msw|@mswjs|@bundled-es-modules|until-async|rettime)/)',
   ];
   // Jest が package.json exports を正しく解決するように設定
   jestConfig.testEnvironmentOptions = {

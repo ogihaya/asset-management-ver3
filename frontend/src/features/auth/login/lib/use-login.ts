@@ -9,12 +9,7 @@ export interface UseLoginOptions {
 
 export function useLogin(options: UseLoginOptions = {}) {
   return useMutation({
-    mutationFn: (credentials: LoginFormData) => {
-      return authApi.login({
-        login_id: credentials.loginId,
-        password: credentials.password,
-      });
-    },
+    mutationFn: (credentials: LoginFormData) => authApi.login(credentials),
     onSuccess: options.onSuccess,
     onError: options.onError,
   });

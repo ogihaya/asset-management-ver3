@@ -2,100 +2,107 @@ import { http, HttpResponse } from 'msw';
 import { server } from '@/__mocks__/server';
 
 const API_BASE_URL = 'http://localhost:8000';
+const SESSION_EXPIRED_RESPONSE = {
+  error: {
+    code: 'SESSION_EXPIRED',
+    message: 'セッションの有効期限が切れました。再度ログインしてください。',
+    details: {},
+  },
+};
 
 // httpClient は各テストで動的にインポートする必要がある
 // （環境変数やwindow.locationの状態をリセットするため）
 
 describe('httpClient', () => {
-  let locationHref = 'http://localhost:3000';
-  const originalLocation = window.location;
-
   beforeEach(() => {
-    // window.location をモック
-    locationHref = 'http://localhost:3000';
-    delete (window as any).location;
-    window.location = {
-      ...originalLocation,
-      href: locationHref,
-    } as Location;
-
-    Object.defineProperty(window.location, 'href', {
-      get: () => locationHref,
-      set: (value: string) => {
-        locationHref = value;
-      },
-      configurable: true,
-    });
-
-    // モジュールキャッシュをクリア
     jest.resetModules();
-  });
-
-  afterEach(() => {
-    // window.location を復元
-    window.location = originalLocation;
   });
 
   describe('基本設定', () => {
     it('baseURLが正しく設定されている', async () => {
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const { default: httpClient } =
+        await import('@/shared/api/client/http-client');
 
       expect(httpClient.defaults.baseURL).toBe(API_BASE_URL);
     });
 
     it('timeoutが正しく設定されている', async () => {
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const { default: httpClient } =
+        await import('@/shared/api/client/http-client');
 
       expect(httpClient.defaults.timeout).toBe(10000);
     });
 
     it('withCredentialsが有効になっている', async () => {
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const { default: httpClient } =
+        await import('@/shared/api/client/http-client');
 
       expect(httpClient.defaults.withCredentials).toBe(true);
     });
   });
 
   describe('レスポンスインターセプター', () => {
-    // Note: window.location.href の設定はjsdom環境で完全にテストすることが困難です。
-    // このテストはE2Eテストで検証することを推奨します。
-    it('401エラー時にエラーをスローする', async () => {
+    it('401 SESSION_EXPIRED時に登録済みハンドラーを呼ぶ', async () => {
       server.use(
         http.get(`${API_BASE_URL}/protected`, () => {
-          return HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 });
+          return HttpResponse.json(SESSION_EXPIRED_RESPONSE, { status: 401 });
         }),
       );
 
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const onSessionExpired = jest.fn();
+      const { default: httpClient, registerSessionExpiredHandler } =
+        await import('@/shared/api/client/http-client');
+
+      registerSessionExpiredHandler(onSessionExpired);
 
       await expect(httpClient.get('/protected')).rejects.toThrow();
+
+      expect(onSessionExpired).toHaveBeenCalledTimes(1);
     });
 
-    it('/auth/statusの401はリダイレクトしない', async () => {
+    it('/auth/statusの401 SESSION_EXPIREDはハンドラーを呼ばない', async () => {
       server.use(
-        http.get(`${API_BASE_URL}/auth/status`, () => {
-          return HttpResponse.json({ detail: 'Unauthorized' }, { status: 401 });
+        http.get(`${API_BASE_URL}/api/v1/auth/status`, () => {
+          return HttpResponse.json(SESSION_EXPIRED_RESPONSE, { status: 401 });
         }),
       );
 
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
+      const onSessionExpired = jest.fn();
+      const { default: httpClient, registerSessionExpiredHandler } =
+        await import('@/shared/api/client/http-client');
+
+      registerSessionExpiredHandler(onSessionExpired);
+
+      await expect(httpClient.get('/api/v1/auth/status')).rejects.toThrow();
+
+      expect(onSessionExpired).not.toHaveBeenCalled();
+    });
+
+    it('通常の401エラーではハンドラーを呼ばない', async () => {
+      server.use(
+        http.get(`${API_BASE_URL}/protected`, () => {
+          return HttpResponse.json(
+            {
+              error: {
+                code: 'UNAUTHORIZED',
+                message: '認証に失敗しました。',
+                details: {},
+              },
+            },
+            { status: 401 },
+          );
+        }),
       );
 
-      const initialHref = locationHref;
+      const onSessionExpired = jest.fn();
+      const { default: httpClient, registerSessionExpiredHandler } =
+        await import('@/shared/api/client/http-client');
 
-      await expect(httpClient.get('/auth/status')).rejects.toThrow();
+      registerSessionExpiredHandler(onSessionExpired);
 
-      // リダイレクトは発生しない
-      expect(locationHref).toBe(initialHref);
+      await expect(httpClient.get('/protected')).rejects.toThrow();
+
+      expect(onSessionExpired).not.toHaveBeenCalled();
     });
 
     it('正常なレスポンスはそのまま返される', async () => {
@@ -105,9 +112,8 @@ describe('httpClient', () => {
         }),
       );
 
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const { default: httpClient } =
+        await import('@/shared/api/client/http-client');
 
       const response = await httpClient.get('/test');
 
@@ -123,9 +129,8 @@ describe('httpClient', () => {
         }),
       );
 
-      const { default: httpClient } = await import(
-        '@/shared/api/client/http-client'
-      );
+      const { default: httpClient } =
+        await import('@/shared/api/client/http-client');
 
       await expect(httpClient.get('/network-error')).rejects.toThrow();
     });

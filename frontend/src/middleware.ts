@@ -8,12 +8,26 @@ const API_BASE_URL =
 
 // 認証機能の有効/無効
 const ENABLE_AUTH = process.env.NEXT_PUBLIC_ENABLE_AUTH !== 'false';
+const SESSION_COOKIE_NAME = 'asset_management_session';
+const AUTH_STATUS_PATH = '/api/v1/auth/status';
 
 // 認証が必要なパス
-const PROTECTED_PATHS = ['/dashboard'];
+const PROTECTED_PATHS = [
+  '/dashboard',
+  '/monthly-record',
+  '/life-plan',
+  '/settings',
+];
 
 // 認証済みユーザーがアクセスできないパス
-const AUTH_PATHS = ['/login'];
+const AUTH_PATHS = [
+  '/login',
+  '/signup',
+  '/password-reset/request',
+  '/password-reset/reset',
+];
+
+type AuthStatus = 'authenticated' | 'unauthenticated' | 'expired' | 'error';
 
 /**
  * Middleware: サーバーサイドで認証状態をチェック
@@ -27,8 +41,8 @@ export async function middleware(request: NextRequest) {
     if (pathname === '/') {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
-    // ログインページへのアクセスはダッシュボードへリダイレクト
-    if (pathname === '/login') {
+    // 公開認証ページへのアクセスはダッシュボードへリダイレクト
+    if (AUTH_PATHS.some((path) => pathname.startsWith(path))) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
     // その他のパスはそのまま続行
@@ -41,78 +55,89 @@ export async function middleware(request: NextRequest) {
   );
   const isAuthPath = AUTH_PATHS.some((path) => pathname.startsWith(path));
 
-  // Cookieからaccess_tokenを取得
-  const accessToken = request.cookies.get('access_token')?.value;
+  const sessionToken = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
   // ルートパスへのアクセス
   if (pathname === '/') {
-    if (accessToken) {
-      // トークンがある場合、バックエンドで検証してからリダイレクト
-      const isAuthenticated = await verifyToken(accessToken);
-      const url = request.nextUrl.clone();
-      url.pathname = isAuthenticated ? '/dashboard' : '/login';
-      return NextResponse.redirect(url);
-    } else {
-      return NextResponse.redirect(new URL('/login', request.url));
+    if (!sessionToken) {
+      return redirectTo(request, '/login');
     }
+
+    const authStatus = await verifySession(sessionToken);
+    return redirectTo(
+      request,
+      authStatus === 'authenticated' ? '/dashboard' : '/login',
+    );
   }
 
   // 保護されたパスにアクセスしようとしている場合
   if (isProtectedPath) {
-    if (!accessToken) {
-      // トークンがない場合はログインページへリダイレクト
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
+    if (!sessionToken) {
+      return redirectTo(request, '/login');
     }
 
-    // トークンがある場合、バックエンドで検証
-    const isAuthenticated = await verifyToken(accessToken);
-    if (!isAuthenticated) {
-      // 認証失敗: ログインページへリダイレクト
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
+    const authStatus = await verifySession(sessionToken);
+    if (authStatus !== 'authenticated') {
+      return redirectTo(request, '/login');
     }
 
-    // 認証成功: そのまま続行
     return NextResponse.next();
   }
 
-  // ログインページにアクセスしようとしている場合
-  if (isAuthPath && accessToken) {
-    // トークンがある場合、バックエンドで検証
-    const isAuthenticated = await verifyToken(accessToken);
-    if (isAuthenticated) {
-      // 認証済みの場合はダッシュボードへリダイレクト
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
+  if (isAuthPath) {
+    if (!sessionToken) {
+      return NextResponse.next();
     }
+
+    const authStatus = await verifySession(sessionToken);
+    if (authStatus === 'authenticated') {
+      return redirectTo(request, '/dashboard');
+    }
+
+    return NextResponse.next();
   }
 
-  // その他のパスはそのまま続行
   return NextResponse.next();
 }
 
 /**
- * バックエンドAPIでトークンを検証
+ * バックエンドAPIでセッション状態を検証
  */
-async function verifyToken(token: string): Promise<boolean> {
+async function verifySession(token: string): Promise<AuthStatus> {
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/status`, {
+    const response = await fetch(`${API_BASE_URL}${AUTH_STATUS_PATH}`, {
       method: 'GET',
       headers: {
-        Cookie: `access_token=${token}`,
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
       },
       cache: 'no-store',
     });
 
-    return response.ok;
+    if (response.status === 401) {
+      const body = await response.json().catch(() => null);
+      return body?.error?.code === 'SESSION_EXPIRED'
+        ? 'expired'
+        : 'unauthenticated';
+    }
+
+    if (!response.ok) {
+      return 'unauthenticated';
+    }
+
+    const body = await response.json().catch(() => null);
+    return body?.data?.authenticated === true
+      ? 'authenticated'
+      : 'unauthenticated';
   } catch (error) {
     console.error('Token verification error:', error);
-    return false;
+    return 'error';
   }
+}
+
+function redirectTo(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+  url.pathname = pathname;
+  return NextResponse.redirect(url);
 }
 
 export const config = {

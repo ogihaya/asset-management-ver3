@@ -6,6 +6,8 @@ import {
   StatusResponse,
 } from '../model/types';
 
+const AUTH_API_BASE_PATH = '/api/v1/auth';
+
 /**
  * 認証API
  */
@@ -15,7 +17,7 @@ export const authApi = {
    */
   async login(credentials: LoginRequest): Promise<LoginResponse> {
     const response = await httpClient.post<LoginResponse>(
-      '/auth/login',
+      `${AUTH_API_BASE_PATH}/login`,
       credentials,
     );
     return response.data;
@@ -25,7 +27,9 @@ export const authApi = {
    * ログアウト
    */
   async logout(): Promise<LogoutResponse> {
-    const response = await httpClient.post<LogoutResponse>('/auth/logout');
+    const response = await httpClient.post<LogoutResponse>(
+      `${AUTH_API_BASE_PATH}/logout`,
+    );
     return response.data;
   },
 
@@ -33,7 +37,9 @@ export const authApi = {
    * 認証状態取得
    */
   async getAuthStatus(): Promise<StatusResponse> {
-    const response = await httpClient.get<StatusResponse>('/auth/status');
+    const response = await httpClient.get<StatusResponse>(
+      `${AUTH_API_BASE_PATH}/status`,
+    );
     return response.data;
   },
 };

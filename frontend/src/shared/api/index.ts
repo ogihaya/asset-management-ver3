@@ -1,1 +1,5 @@
-export { default as httpClient } from './client/http-client';
+export {
+  default as httpClient,
+  isSessionExpiredError,
+  registerSessionExpiredHandler,
+} from './client/http-client';
