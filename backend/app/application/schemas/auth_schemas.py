@@ -26,3 +26,9 @@ class StatusOutputDTO(BaseModel):
 
     is_authenticated: bool = Field(..., description='認証済みかどうか')
     user_id: int = Field(..., description='ユーザーID')
+
+
+class CurrentUserDTO(BaseModel):
+    """認証済みユーザーDTO"""
+
+    id: int = Field(..., description='ユーザーID')
