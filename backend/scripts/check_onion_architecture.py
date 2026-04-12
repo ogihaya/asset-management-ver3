@@ -60,8 +60,8 @@ LAYER_RULES: list[LayerRule] = [
     LayerRule(
         name='Presentation',
         directory='presentation',
-        forbidden=(),
-        description='May depend on inner layers',
+        forbidden=('app.infrastructure',),
+        description='Must not depend on Infrastructure layer',
     ),
 ]
 
@@ -144,7 +144,7 @@ def print_overview() -> None:
     print('  • Domain → Must not depend on other layers')
     print('  • Application → May depend only on Domain')
     print('  • Infrastructure → May depend on Domain and Application')
-    print('  • Presentation → May depend on all inner layers')
+    print('  • Presentation → May depend only on Domain and Application')
     print('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n')
 
 
