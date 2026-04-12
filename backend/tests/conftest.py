@@ -43,6 +43,9 @@ def _ensure_test_settings_env() -> None:
         os.environ['JWT_PUBLIC_KEY'] = public_pem.decode('utf-8').replace('\n', '\\n')
 
 
+_ensure_test_settings_env()
+
+
 @pytest.fixture(scope='session')
 def test_db_engine():
     """テスト用DBエンジン（環境変数に応じてSQLiteまたはPostgreSQL）"""
