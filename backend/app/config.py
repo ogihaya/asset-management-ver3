@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     # 認証機能の有効/無効
     enable_auth: bool = True
+    session_cookie_name: str = 'asset_management_session'
+    session_expiration_days: int = 30
+    session_refresh_interval_hours: int = 24
 
     # JWT settings
     jwt_expiration_hours: str = '24'
