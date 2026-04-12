@@ -19,7 +19,14 @@ describe('useLogout', () => {
     });
 
     expect(onSuccess).toHaveBeenCalledWith(
-      { message: 'ログアウトしました' },
+      {
+        data: {
+          logged_out: true,
+        },
+        meta: {
+          message: 'ログアウトしました。',
+        },
+      },
       undefined,
       undefined,
       expect.objectContaining({ client: expect.anything() }),

@@ -9,6 +9,30 @@ import { NextRequest } from 'next/server';
 
 // 環境変数のバックアップ
 const originalEnv = process.env;
+const authenticatedResponse = {
+  data: {
+    authenticated: true,
+    user: {
+      id: 1,
+      email: 'user@example.com',
+    },
+  },
+  meta: {},
+};
+const unauthenticatedResponse = {
+  data: {
+    authenticated: false,
+    user: null,
+  },
+  meta: {},
+};
+const expiredResponse = {
+  error: {
+    code: 'SESSION_EXPIRED',
+    message: 'セッションの有効期限が切れました。再度ログインしてください。',
+    details: {},
+  },
+};
 
 describe('middleware', () => {
   // fetch をモック
@@ -58,11 +82,15 @@ describe('middleware', () => {
       });
 
       it('有効なトークンでアクセス → そのまま表示', async () => {
-        mockFetch.mockResolvedValueOnce({ ok: true });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => authenticatedResponse,
+        });
 
         const { middleware } = await import('../middleware');
         const request = createRequest('/dashboard', {
-          access_token: 'valid_token',
+          asset_management_session: 'valid_token',
         });
 
         const response = await middleware(request);
@@ -72,11 +100,32 @@ describe('middleware', () => {
       });
 
       it('無効なトークンでアクセス → /login へリダイレクト', async () => {
-        mockFetch.mockResolvedValueOnce({ ok: false });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => unauthenticatedResponse,
+        });
 
         const { middleware } = await import('../middleware');
         const request = createRequest('/dashboard', {
-          access_token: 'invalid_token',
+          asset_management_session: 'invalid_token',
+        });
+
+        const response = await middleware(request);
+
+        expect(response.headers.get('location')).toContain('/login');
+      });
+
+      it('セッション失効時は /login へリダイレクト', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: false,
+          status: 401,
+          json: async () => expiredResponse,
+        });
+
+        const { middleware } = await import('../middleware');
+        const request = createRequest('/monthly-record', {
+          asset_management_session: 'expired_token',
         });
 
         const response = await middleware(request);
@@ -87,11 +136,15 @@ describe('middleware', () => {
 
     describe('認証ページ（/login）', () => {
       it('認証済みでアクセス → /dashboard へリダイレクト', async () => {
-        mockFetch.mockResolvedValueOnce({ ok: true });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => authenticatedResponse,
+        });
 
         const { middleware } = await import('../middleware');
         const request = createRequest('/login', {
-          access_token: 'valid_token',
+          asset_management_session: 'valid_token',
         });
 
         const response = await middleware(request);
@@ -111,11 +164,15 @@ describe('middleware', () => {
 
     describe('ルートパス（/）', () => {
       it('認証済みでアクセス → /dashboard へリダイレクト', async () => {
-        mockFetch.mockResolvedValueOnce({ ok: true });
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => authenticatedResponse,
+        });
 
         const { middleware } = await import('../middleware');
         const request = createRequest('/', {
-          access_token: 'valid_token',
+          asset_management_session: 'valid_token',
         });
 
         const response = await middleware(request);
@@ -168,7 +225,7 @@ describe('middleware', () => {
   });
 });
 
-describe('verifyToken', () => {
+describe('verifySession', () => {
   const originalEnv = process.env;
   const mockFetch = jest.fn();
 
@@ -184,12 +241,16 @@ describe('verifyToken', () => {
   });
 
   it('API成功時にtrueを返す', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => authenticatedResponse,
+    });
 
     process.env.NEXT_PUBLIC_ENABLE_AUTH = 'true';
     const { middleware } = await import('../middleware');
     const request = new NextRequest('http://localhost:3000/dashboard');
-    request.cookies.set('access_token', 'valid_token');
+    request.cookies.set('asset_management_session', 'valid_token');
 
     await middleware(request);
 
@@ -197,18 +258,22 @@ describe('verifyToken', () => {
       expect.stringContaining('/auth/status'),
       expect.objectContaining({
         method: 'GET',
-        headers: { Cookie: 'access_token=valid_token' },
+        headers: { Cookie: 'asset_management_session=valid_token' },
       }),
     );
   });
 
   it('API失敗時はリダイレクトされる', async () => {
-    mockFetch.mockResolvedValueOnce({ ok: false });
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => unauthenticatedResponse,
+    });
 
     process.env.NEXT_PUBLIC_ENABLE_AUTH = 'true';
     const { middleware } = await import('../middleware');
     const request = new NextRequest('http://localhost:3000/dashboard');
-    request.cookies.set('access_token', 'invalid_token');
+    request.cookies.set('asset_management_session', 'invalid_token');
 
     const response = await middleware(request);
 
@@ -221,7 +286,7 @@ describe('verifyToken', () => {
     process.env.NEXT_PUBLIC_ENABLE_AUTH = 'true';
     const { middleware } = await import('../middleware');
     const request = new NextRequest('http://localhost:3000/dashboard');
-    request.cookies.set('access_token', 'any_token');
+    request.cookies.set('asset_management_session', 'any_token');
 
     const response = await middleware(request);
 

@@ -22,4 +22,5 @@ export {
   createLoginErrorHandler,
   createLogoutErrorHandler,
   createAuthStatusHandler,
+  createSessionExpiredAuthStatusHandler,
 } from './auth';
