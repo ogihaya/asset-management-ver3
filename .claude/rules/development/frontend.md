@@ -237,7 +237,10 @@ import { useLogin } from "@/features/auth/login/lib/use-login"; // NG
 import httpClient from "@/shared/api/client/http-client"; // OK
 ```
 
-> Note: Barrel files (index.ts) are not used. Import directly by file path for faster compilation.
+> Note:
+> - Slice-level `index.ts` files are allowed
+> - Layer-wide mass re-exports such as `entities/index.ts` or `features/index.ts` are forbidden
+> - Imports should consistently use either a slice's public API or the specific leaf file that is needed
 
 **Auto-checked by ESLint!**
 
