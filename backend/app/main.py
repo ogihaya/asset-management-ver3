@@ -10,8 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from app.application.errors import AppError
 from app.di.auth import get_auth_session_policy
 from app.infrastructure.logging.logging import setup_logging
-from app.presentation.api.auth_cookie import clear_auth_cookie
 from app.presentation.api.auth_api import router as auth_router
+from app.presentation.api.auth_cookie import clear_auth_cookie
 from app.presentation.api.users_api import router as users_router
 
 # ロギングの設定を初期化
