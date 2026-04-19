@@ -29,6 +29,17 @@ class UserSessionRepositoryImpl(IUserSessionRepository):
         self.session.refresh(session_model)
         return self._to_entity(session_model)
 
+    def find_by_token_hash(self, session_token_hash: str) -> UserSession | None:
+        """トークンハッシュでユーザーセッションを取得"""
+        session_model = (
+            self.session.query(UserSessionModel)
+            .filter(UserSessionModel.session_token_hash == session_token_hash)
+            .first()
+        )
+        if session_model is None:
+            return None
+        return self._to_entity(session_model)
+
     def find_active_by_token_hash(
         self, session_token_hash: str, now: datetime
     ) -> UserSession | None:

@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
-from app.application.schemas.auth_schemas import CurrentUserDTO, LoginInputDTO
+from app.application.schemas.auth_schemas import (
+    AuthSessionContextDTO,
+    LoginInputDTO,
+    SignupInputDTO,
+)
 from app.application.use_cases.auth_usecase import AuthUsecase
-from app.di.auth import get_auth_usecase, get_current_auth_user
+from app.config import get_settings
+from app.di.auth import get_auth_session_context, get_auth_usecase
 from app.presentation.schemas.auth_schemas import (
     AuthUserResponse,
     LoginData,
@@ -24,12 +29,16 @@ router = APIRouter(prefix='/auth', tags=['認証'])
 @router.post('/signup', response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 def signup(
     request: SignupRequest,
-) -> None:
-    """サインアップエンドポイント（Part 1 placeholder）"""
-    _ = request
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail='Signup is not implemented yet.',
+    auth_usecase: AuthUsecase = Depends(get_auth_usecase),
+) -> SignupResponse:
+    """サインアップエンドポイント"""
+    output_dto = auth_usecase.signup(
+        SignupInputDTO(email=request.email, password=request.password)
+    )
+
+    return SignupResponse(
+        data={'user_id': output_dto.user_id, 'email': output_dto.email},
+        meta=MessageMeta(message=output_dto.message),
     )
 
 
@@ -41,14 +50,16 @@ def login(
 ) -> LoginResponse:
     input_dto = LoginInputDTO(email=request.email, password=request.password)
     output_dto = auth_usecase.login(input_dto)
+    settings = get_settings()
+    secure_cookie = settings.stage != 'development'
 
-    # Part 1 では既存 PoC の cookie 実装を暫定利用する。
     response.set_cookie(
-        key='access_token',
+        key=settings.session_cookie_name,
         value=output_dto.session_token,
         httponly=True,
-        secure=True,
+        secure=secure_cookie,
         samesite='lax',
+        path='/',
         max_age=output_dto.session_expires_in_days * 24 * 60 * 60,
     )
 
@@ -69,14 +80,20 @@ def login(
 @router.post('/logout', response_model=LogoutResponse, status_code=status.HTTP_200_OK)
 def logout(
     response: Response,
-    current_user: CurrentUserDTO = Depends(get_current_auth_user),
+    session_context: AuthSessionContextDTO = Depends(get_auth_session_context),
     auth_usecase: AuthUsecase = Depends(get_auth_usecase),
 ) -> LogoutResponse:
     """ログアウトエンドポイント"""
-    _ = current_user
-    output_dto = auth_usecase.logout()
+    output_dto = auth_usecase.logout(session_context.session_token_hash)
+    settings = get_settings()
+    secure_cookie = settings.stage != 'development'
 
-    response.delete_cookie(key='access_token')
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        path='/',
+        secure=secure_cookie,
+        samesite='lax',
+    )
 
     return LogoutResponse(
         data=LogoutData(logged_out=output_dto.logged_out),
@@ -86,11 +103,11 @@ def logout(
 
 @router.get('/status', response_model=StatusResponse, status_code=status.HTTP_200_OK)
 def get_status(
-    current_user: CurrentUserDTO = Depends(get_current_auth_user),
+    session_context: AuthSessionContextDTO = Depends(get_auth_session_context),
     auth_usecase: AuthUsecase = Depends(get_auth_usecase),
 ) -> StatusResponse:
     """認証状態取得エンドポイント"""
-    output_dto = auth_usecase.get_auth_status(user_id=current_user.id)
+    output_dto = auth_usecase.get_auth_status(session_context)
 
     user = None
     if output_dto.user is not None:

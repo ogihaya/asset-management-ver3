@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -20,6 +22,7 @@ class SignupOutputDTO(BaseModel):
 
     user_id: int = Field(..., description='ユーザーID')
     email: str = Field(..., description='メールアドレス')
+    message: str = Field(..., description='メッセージ')
 
 
 class LoginInputDTO(BaseModel):
@@ -50,6 +53,21 @@ class StatusOutputDTO(BaseModel):
 
     authenticated: bool = Field(..., description='認証済みかどうか')
     user: AuthUserDTO | None = Field(None, description='認証済みユーザー')
+
+
+class AuthSessionContextDTO(BaseModel):
+    """認証セッション解決結果DTO"""
+
+    raw_token: str | None = Field(None, description='平文セッショントークン')
+    session_token_hash: str | None = Field(
+        None, description='ハッシュ化済みセッショントークン'
+    )
+    session_id: int | None = Field(None, description='セッションID')
+    user_id: int | None = Field(None, description='ユーザーID')
+    authenticated: bool = Field(False, description='認証済みかどうか')
+    expired: bool = Field(False, description='期限切れかどうか')
+    last_seen_at: datetime | None = Field(None, description='最終アクセス日時')
+    expires_at: datetime | None = Field(None, description='有効期限')
 
 
 class CurrentUserDTO(BaseModel):

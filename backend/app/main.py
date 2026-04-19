@@ -1,10 +1,14 @@
 import os
 
 import uvicorn
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.application.errors import AppError
+from app.config import get_settings
 from app.infrastructure.logging.logging import setup_logging
 from app.presentation.api.auth_api import router as auth_router
 from app.presentation.api.users_api import router as users_router
@@ -53,6 +57,56 @@ api_v1_router = APIRouter(prefix='/api/v1')
 api_v1_router.include_router(auth_router)
 api_v1_router.include_router(users_router)
 app.include_router(api_v1_router)
+
+
+@app.exception_handler(AppError)
+async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
+    """アプリケーション例外を共通レスポンス形式へ変換"""
+    response = JSONResponse(
+        status_code=exc.status_code,
+        content={
+            'error': {
+                'code': exc.code,
+                'message': exc.message,
+                'details': exc.details,
+            }
+        },
+    )
+
+    if exc.clear_auth_cookie:
+        settings = get_settings()
+        response.delete_cookie(
+            key=settings.session_cookie_name,
+            path='/',
+            secure=settings.stage != 'development',
+            samesite='lax',
+        )
+
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(
+    _: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """FastAPI のバリデーション例外を共通レスポンス形式へ変換"""
+    details: dict[str, object] = {'errors': exc.errors()}
+    for error in exc.errors():
+        loc = error.get('loc', ())
+        if len(loc) >= 2 and loc[0] == 'body':
+            details = {'field': loc[-1], 'errors': exc.errors()}
+            break
+
+    return JSONResponse(
+        status_code=422,
+        content={
+            'error': {
+                'code': 'VALIDATION_ERROR',
+                'message': '入力内容に誤りがあります。',
+                'details': details,
+            }
+        },
+    )
 
 
 # ヘルスチェックエンドポイント（ALB/ECS用）
