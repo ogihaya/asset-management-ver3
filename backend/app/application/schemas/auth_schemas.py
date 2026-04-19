@@ -74,3 +74,15 @@ class CurrentUserDTO(BaseModel):
     """認証済みユーザーDTO"""
 
     id: int = Field(..., description='ユーザーID')
+
+
+class AuthSessionPolicyDTO(BaseModel):
+    """認証セッションポリシーDTO"""
+
+    cookie_name: str = Field(..., description='認証Cookie名')
+    session_expiration_days: int = Field(..., description='セッション有効期限（日数）')
+    session_refresh_interval_hours: int = Field(
+        ..., description='セッション延長判定時間（時間）'
+    )
+    secure_cookie: bool = Field(..., description='Secure属性を付けるか')
+    enable_auth: bool = Field(..., description='認証機能の有効/無効')

@@ -7,15 +7,15 @@ from app.application.interfaces.password_hash_service import IPasswordHashServic
 from app.application.interfaces.session_token_service import ISessionTokenService
 from app.application.schemas.auth_schemas import (
     AuthSessionContextDTO,
+    AuthSessionPolicyDTO,
     AuthUserDTO,
-    SignupInputDTO,
-    SignupOutputDTO,
     LoginInputDTO,
     LoginOutputDTO,
     LogoutOutputDTO,
+    SignupInputDTO,
+    SignupOutputDTO,
     StatusOutputDTO,
 )
-from app.config import get_settings
 from app.domain.entities.user import User
 from app.domain.entities.user_session import UserSession
 from app.domain.repositories.user_repository import IUserRepository
@@ -33,11 +33,13 @@ class AuthUsecase:
         user_session_repository: IUserSessionRepository,
         password_hash_service: IPasswordHashService,
         session_token_service: ISessionTokenService,
+        auth_session_policy: AuthSessionPolicyDTO,
     ):
         self.user_repository = user_repository
         self.user_session_repository = user_session_repository
         self.password_hash_service = password_hash_service
         self.session_token_service = session_token_service
+        self.auth_session_policy = auth_session_policy
 
     def signup(self, input_dto: SignupInputDTO) -> SignupOutputDTO:
         """サインアップ処理"""
@@ -89,11 +91,10 @@ class AuthUsecase:
                 status_code=401,
             )
 
-        settings = get_settings()
         now = datetime.now(UTC)
         raw_token = self.session_token_service.generate_token()
         token_hash = self.session_token_service.hash_token(raw_token)
-        expires_at = now + timedelta(days=settings.session_expiration_days)
+        expires_at = now + timedelta(days=self.auth_session_policy.session_expiration_days)
 
         self.user_session_repository.create(
             UserSession(
@@ -108,7 +109,7 @@ class AuthUsecase:
         return LoginOutputDTO(
             user=AuthUserDTO(id=user.id, email=user.email),
             session_token=raw_token,
-            session_expires_in_days=settings.session_expiration_days,
+            session_expires_in_days=self.auth_session_policy.session_expiration_days,
             message='ログインしました。',
         )
 
@@ -150,15 +151,16 @@ class AuthUsecase:
                 expires_at=context.expires_at,
                 last_seen_at=context.last_seen_at,
             )
-            settings = get_settings()
             now = datetime.now(UTC)
             if session.should_refresh(
-                now, refresh_interval_hours=settings.session_refresh_interval_hours
+                now,
+                refresh_interval_hours=self.auth_session_policy.session_refresh_interval_hours,
             ):
                 self.user_session_repository.touch(
                     session_id=context.session_id,
                     last_seen_at=now,
-                    expires_at=now + timedelta(days=settings.session_expiration_days),
+                    expires_at=now
+                    + timedelta(days=self.auth_session_policy.session_expiration_days),
                 )
 
         return StatusOutputDTO(

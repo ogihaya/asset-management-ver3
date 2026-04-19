@@ -8,8 +8,9 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.application.errors import AppError
-from app.config import get_settings
+from app.di.auth import get_auth_session_policy
 from app.infrastructure.logging.logging import setup_logging
+from app.presentation.api.auth_cookie import clear_auth_cookie
 from app.presentation.api.auth_api import router as auth_router
 from app.presentation.api.users_api import router as users_router
 
@@ -74,13 +75,7 @@ async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     )
 
     if exc.clear_auth_cookie:
-        settings = get_settings()
-        response.delete_cookie(
-            key=settings.session_cookie_name,
-            path='/',
-            secure=settings.stage != 'development',
-            samesite='lax',
-        )
+        clear_auth_cookie(response, get_auth_session_policy())
 
     return response
 

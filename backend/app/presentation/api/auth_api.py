@@ -2,12 +2,17 @@ from fastapi import APIRouter, Depends, Response, status
 
 from app.application.schemas.auth_schemas import (
     AuthSessionContextDTO,
+    AuthSessionPolicyDTO,
     LoginInputDTO,
     SignupInputDTO,
 )
 from app.application.use_cases.auth_usecase import AuthUsecase
-from app.config import get_settings
-from app.di.auth import get_auth_session_context, get_auth_usecase
+from app.di.auth import (
+    get_auth_session_context,
+    get_auth_session_policy,
+    get_auth_usecase,
+)
+from app.presentation.api.auth_cookie import clear_auth_cookie, set_auth_cookie
 from app.presentation.schemas.auth_schemas import (
     AuthUserResponse,
     LoginData,
@@ -46,22 +51,12 @@ def signup(
 def login(
     request: LoginRequest,
     response: Response,
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     auth_usecase: AuthUsecase = Depends(get_auth_usecase),
 ) -> LoginResponse:
     input_dto = LoginInputDTO(email=request.email, password=request.password)
     output_dto = auth_usecase.login(input_dto)
-    settings = get_settings()
-    secure_cookie = settings.stage != 'development'
-
-    response.set_cookie(
-        key=settings.session_cookie_name,
-        value=output_dto.session_token,
-        httponly=True,
-        secure=secure_cookie,
-        samesite='lax',
-        path='/',
-        max_age=output_dto.session_expires_in_days * 24 * 60 * 60,
-    )
+    set_auth_cookie(response, output_dto.session_token, auth_session_policy)
 
     return LoginResponse(
         data=LoginData(
@@ -80,20 +75,13 @@ def login(
 @router.post('/logout', response_model=LogoutResponse, status_code=status.HTTP_200_OK)
 def logout(
     response: Response,
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     session_context: AuthSessionContextDTO = Depends(get_auth_session_context),
     auth_usecase: AuthUsecase = Depends(get_auth_usecase),
 ) -> LogoutResponse:
     """ログアウトエンドポイント"""
     output_dto = auth_usecase.logout(session_context.session_token_hash)
-    settings = get_settings()
-    secure_cookie = settings.stage != 'development'
-
-    response.delete_cookie(
-        key=settings.session_cookie_name,
-        path='/',
-        secure=secure_cookie,
-        samesite='lax',
-    )
+    clear_auth_cookie(response, auth_session_policy)
 
     return LogoutResponse(
         data=LogoutData(logged_out=output_dto.logged_out),

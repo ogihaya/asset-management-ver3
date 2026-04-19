@@ -6,9 +6,14 @@ from sqlalchemy.orm import Session
 from app.application.errors import AppError
 from app.application.interfaces.password_hash_service import IPasswordHashService
 from app.application.interfaces.session_token_service import ISessionTokenService
-from app.application.schemas.auth_schemas import AuthSessionContextDTO, CurrentUserDTO
+from app.application.schemas.auth_schemas import (
+    AuthSessionContextDTO,
+    AuthSessionPolicyDTO,
+    CurrentUserDTO,
+)
 from app.application.use_cases.auth_usecase import AuthUsecase
 from app.application.use_cases.user_account_usecase import UserAccountUsecase
+from app.config import get_settings
 from app.domain.repositories.user_repository import IUserRepository
 from app.domain.repositories.user_session_repository import IUserSessionRepository
 from app.infrastructure.db.repositories.user_repository_impl import UserRepositoryImpl
@@ -18,7 +23,6 @@ from app.infrastructure.db.repositories.user_session_repository_impl import (
 from app.infrastructure.db.session import get_db
 from app.infrastructure.security.password_hash_service_impl import PasswordHashServiceImpl
 from app.infrastructure.security.session_token_service_impl import SessionTokenServiceImpl
-from app.config import get_settings
 
 
 def get_user_repository(session: Session = Depends(get_db)) -> IUserRepository:
@@ -43,8 +47,21 @@ def get_session_token_service() -> ISessionTokenService:
     return SessionTokenServiceImpl()
 
 
+def get_auth_session_policy() -> AuthSessionPolicyDTO:
+    """認証セッションポリシーを取得する"""
+    settings = get_settings()
+    return AuthSessionPolicyDTO(
+        cookie_name=settings.session_cookie_name,
+        session_expiration_days=settings.session_expiration_days,
+        session_refresh_interval_hours=settings.session_refresh_interval_hours,
+        secure_cookie=settings.stage != 'development',
+        enable_auth=settings.enable_auth,
+    )
+
+
 def get_auth_session_context(
     request: Request,
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     user_repository: IUserRepository = Depends(get_user_repository),
     user_session_repository: IUserSessionRepository = Depends(
         get_user_session_repository
@@ -52,11 +69,10 @@ def get_auth_session_context(
     session_token_service: ISessionTokenService = Depends(get_session_token_service),
 ) -> AuthSessionContextDTO:
     """現在のセッション状態を取得する"""
-    settings = get_settings()
-    if not settings.enable_auth:
+    if not auth_session_policy.enable_auth:
         return AuthSessionContextDTO(authenticated=True, user_id=0)
 
-    raw_token = request.cookies.get(settings.session_cookie_name)
+    raw_token = request.cookies.get(auth_session_policy.cookie_name)
     if not raw_token:
         return AuthSessionContextDTO()
 
@@ -111,11 +127,11 @@ def get_auth_session_context(
 
 
 def get_current_auth_user(
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     session_context: AuthSessionContextDTO = Depends(get_auth_session_context),
 ) -> CurrentUserDTO:
     """現在の認証済みユーザーを取得する"""
-    settings = get_settings()
-    if not settings.enable_auth:
+    if not auth_session_policy.enable_auth:
         return CurrentUserDTO(id=0)
 
     if session_context.expired:
@@ -137,6 +153,7 @@ def get_current_auth_user(
 
 
 def get_auth_usecase(
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     user_repository: IUserRepository = Depends(get_user_repository),
     user_session_repository: IUserSessionRepository = Depends(
         get_user_session_repository
@@ -149,6 +166,7 @@ def get_auth_usecase(
         user_session_repository=user_session_repository,
         password_hash_service=password_hash_service,
         session_token_service=session_token_service,
+        auth_session_policy=auth_session_policy,
     )
 
 

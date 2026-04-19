@@ -1,9 +1,13 @@
 from fastapi import APIRouter, Depends, Response, status
 
-from app.application.schemas.auth_schemas import CurrentUserDTO
+from app.application.schemas.auth_schemas import AuthSessionPolicyDTO, CurrentUserDTO
 from app.application.use_cases.user_account_usecase import UserAccountUsecase
-from app.config import get_settings
-from app.di.auth import get_current_auth_user, get_user_account_usecase
+from app.di.auth import (
+    get_auth_session_policy,
+    get_current_auth_user,
+    get_user_account_usecase,
+)
+from app.presentation.api.auth_cookie import clear_auth_cookie
 from app.presentation.schemas.auth_schemas import EmptyMeta, MessageMeta
 from app.presentation.schemas.user_schemas import DeleteMeResponse, UserMeResponse
 
@@ -26,19 +30,13 @@ def get_me(
 @router.delete('/me', response_model=DeleteMeResponse, status_code=status.HTTP_200_OK)
 def delete_me(
     response: Response,
+    auth_session_policy: AuthSessionPolicyDTO = Depends(get_auth_session_policy),
     current_user: CurrentUserDTO = Depends(get_current_auth_user),
     user_account_usecase: UserAccountUsecase = Depends(get_user_account_usecase),
 ) -> DeleteMeResponse:
     """アカウント削除エンドポイント"""
     output_dto = user_account_usecase.delete_me(current_user.id)
-    settings = get_settings()
-
-    response.delete_cookie(
-        key=settings.session_cookie_name,
-        path='/',
-        secure=settings.stage != 'development',
-        samesite='lax',
-    )
+    clear_auth_cookie(response, auth_session_policy)
 
     return DeleteMeResponse(
         data={'deleted': output_dto.deleted},
