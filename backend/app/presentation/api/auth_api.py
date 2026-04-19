@@ -31,7 +31,9 @@ from app.presentation.schemas.auth_schemas import (
 router = APIRouter(prefix='/auth', tags=['認証'])
 
 
-@router.post('/signup', response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    '/signup', response_model=SignupResponse, status_code=status.HTTP_201_CREATED
+)
 def signup(
     request: SignupRequest,
     auth_usecase: AuthUsecase = Depends(get_auth_usecase),

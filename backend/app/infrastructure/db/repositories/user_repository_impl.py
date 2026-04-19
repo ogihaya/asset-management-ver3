@@ -48,7 +48,9 @@ class UserRepositoryImpl(IUserRepository):
         Returns:
             Optional[User]: ユーザーエンティティ（存在しない場合はNone）
         """
-        user_model = self.session.query(UserModel).filter(UserModel.email == email).first()
+        user_model = (
+            self.session.query(UserModel).filter(UserModel.email == email).first()
+        )
         if user_model is None:
             return None
         return self._to_entity(user_model)

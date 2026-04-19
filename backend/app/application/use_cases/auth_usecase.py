@@ -43,7 +43,10 @@ class AuthUsecase:
 
     def signup(self, input_dto: SignupInputDTO) -> SignupOutputDTO:
         """サインアップ処理"""
-        if self.user_repository.get_by_email_including_deleted(input_dto.email) is not None:
+        if (
+            self.user_repository.get_by_email_including_deleted(input_dto.email)
+            is not None
+        ):
             raise AppError(
                 code='DUPLICATE_NAME',
                 message='このメールアドレスは既に使用されています。',
@@ -94,7 +97,9 @@ class AuthUsecase:
         now = datetime.now(UTC)
         raw_token = self.session_token_service.generate_token()
         token_hash = self.session_token_service.hash_token(raw_token)
-        expires_at = now + timedelta(days=self.auth_session_policy.session_expiration_days)
+        expires_at = now + timedelta(
+            days=self.auth_session_policy.session_expiration_days
+        )
 
         self.user_session_repository.create(
             UserSession(
@@ -140,10 +145,7 @@ class AuthUsecase:
         if user is None:
             return StatusOutputDTO(authenticated=False, user=None)
 
-        if (
-            context.session_id is not None
-            and context.expires_at is not None
-        ):
+        if context.session_id is not None and context.expires_at is not None:
             session = UserSession(
                 id=context.session_id,
                 user_id=context.user_id,
