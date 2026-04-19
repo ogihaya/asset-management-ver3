@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class UserMeOutputDTO(BaseModel):
-    """現在ユーザー出力DTO"""
+    """現在ユーザー取得出力DTO"""
 
     id: int = Field(..., description='ユーザーID')
     email: str = Field(..., description='メールアドレス')

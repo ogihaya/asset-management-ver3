@@ -8,6 +8,7 @@ from app.application.interfaces.password_hash_service import IPasswordHashServic
 from app.application.interfaces.session_token_service import ISessionTokenService
 from app.application.schemas.auth_schemas import AuthSessionContextDTO, CurrentUserDTO
 from app.application.use_cases.auth_usecase import AuthUsecase
+from app.application.use_cases.user_account_usecase import UserAccountUsecase
 from app.domain.repositories.user_repository import IUserRepository
 from app.domain.repositories.user_session_repository import IUserSessionRepository
 from app.infrastructure.db.repositories.user_repository_impl import UserRepositoryImpl
@@ -148,4 +149,16 @@ def get_auth_usecase(
         user_session_repository=user_session_repository,
         password_hash_service=password_hash_service,
         session_token_service=session_token_service,
+    )
+
+
+def get_user_account_usecase(
+    user_repository: IUserRepository = Depends(get_user_repository),
+    user_session_repository: IUserSessionRepository = Depends(
+        get_user_session_repository
+    ),
+) -> UserAccountUsecase:
+    return UserAccountUsecase(
+        user_repository=user_repository,
+        user_session_repository=user_session_repository,
     )
