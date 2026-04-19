@@ -15,6 +15,33 @@ TEST_NOW = datetime(2026, 4, 12, 12, 0, 0, tzinfo=UTC)
 class TestUserSessionRepositoryImpl:
     """UserSessionRepositoryImplのテストクラス"""
 
+    def test_find_by_token_hash_returns_session_even_if_expired(self, db_session):
+        """expired 判定用に期限切れセッションも取得できる"""
+        from app.infrastructure.db.models.user_model import UserModel
+        from app.infrastructure.db.models.user_session_model import UserSessionModel
+
+        user_model = UserModel(
+            email='find-by-token@example.com',
+            password_hash='hashed_password',
+        )
+        db_session.add(user_model)
+        db_session.commit()
+
+        session_model = UserSessionModel(
+            user_id=user_model.id,
+            session_token_hash='expired-lookup-hash',
+            expires_at=TEST_NOW - timedelta(seconds=1),
+        )
+        db_session.add(session_model)
+        db_session.commit()
+
+        repository = UserSessionRepositoryImpl(session=db_session)
+        result = repository.find_by_token_hash('expired-lookup-hash')
+
+        assert result is not None
+        assert result.id == session_model.id
+        assert result.user_id == user_model.id
+
     def test_create_session(self, db_session):
         """ユーザーセッションを作成できる"""
         from app.infrastructure.db.models.user_model import UserModel

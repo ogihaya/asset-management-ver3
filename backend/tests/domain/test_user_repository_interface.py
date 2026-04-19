@@ -19,6 +19,11 @@ class TestUserRepositoryInterface:
         assert hasattr(IUserRepository, 'get_by_email')
         assert callable(IUserRepository.get_by_email)
 
+    def test_has_get_by_email_including_deleted_method(self):
+        """get_by_email_including_deletedメソッドが定義されている"""
+        assert hasattr(IUserRepository, 'get_by_email_including_deleted')
+        assert callable(IUserRepository.get_by_email_including_deleted)
+
     def test_has_get_by_id_method(self):
         """get_by_idメソッドが定義されている"""
         assert hasattr(IUserRepository, 'get_by_id')
@@ -43,6 +48,10 @@ class TestUserRepositoryInterface:
         """メソッドのシグネチャを確認"""
         # get_by_email
         sig = inspect.signature(IUserRepository.get_by_email)
+        assert 'email' in sig.parameters
+
+        # get_by_email_including_deleted
+        sig = inspect.signature(IUserRepository.get_by_email_including_deleted)
         assert 'email' in sig.parameters
 
         # get_by_id

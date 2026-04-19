@@ -18,6 +18,7 @@ class TestUserSessionRepositoryInterface:
         """必要なメソッドが定義されていることを確認"""
         for method_name in (
             'create',
+            'find_by_token_hash',
             'find_active_by_token_hash',
             'revoke_by_token_hash',
             'revoke_all_by_user_id',
@@ -30,6 +31,9 @@ class TestUserSessionRepositoryInterface:
         """メソッドのシグネチャを確認"""
         create_sig = inspect.signature(IUserSessionRepository.create)
         assert 'session' in create_sig.parameters
+
+        find_any_sig = inspect.signature(IUserSessionRepository.find_by_token_hash)
+        assert 'session_token_hash' in find_any_sig.parameters
 
         find_sig = inspect.signature(IUserSessionRepository.find_active_by_token_hash)
         assert 'session_token_hash' in find_sig.parameters

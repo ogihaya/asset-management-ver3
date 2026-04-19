@@ -1,91 +1,207 @@
 """AuthUsecaseのテスト"""
 
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from fastapi import HTTPException
 
-from app.application.schemas.auth_schemas import (
-    LoginInputDTO,
-    LoginOutputDTO,
-    LogoutOutputDTO,
-    StatusOutputDTO,
-)
+from app.application.errors import AppError
+from app.application.schemas.auth_schemas import AuthSessionContextDTO, LoginInputDTO, SignupInputDTO
 from app.application.use_cases.auth_usecase import AuthUsecase
+from app.infrastructure.db.models.user_model import UserModel
+from app.infrastructure.db.models.user_session_model import UserSessionModel
+from app.infrastructure.db.repositories.user_repository_impl import UserRepositoryImpl
+from app.infrastructure.db.repositories.user_session_repository_impl import (
+    UserSessionRepositoryImpl,
+)
+from app.infrastructure.security.password_hash_service_impl import PasswordHashServiceImpl
+from app.infrastructure.security.session_token_service_impl import SessionTokenServiceImpl
+
+TEST_NOW = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+
+
+def create_usecase(db_session) -> AuthUsecase:
+    return AuthUsecase(
+        user_repository=UserRepositoryImpl(db_session),
+        user_session_repository=UserSessionRepositoryImpl(db_session),
+        password_hash_service=PasswordHashServiceImpl(),
+        session_token_service=SessionTokenServiceImpl(),
+    )
 
 
 class TestAuthUsecase:
     """AuthUsecaseのテストクラス"""
 
-    def test_login_success(self, mock_security_service):
+    def test_signup_success(self, db_session):
+        """サインアップ成功のテスト"""
+        usecase = create_usecase(db_session)
+
+        result = usecase.signup(
+            SignupInputDTO(email='user@example.com', password='Passw0rd')
+        )
+
+        assert result.user_id > 0
+        assert result.email == 'user@example.com'
+        assert result.message == 'ユーザー登録が完了しました。'
+
+    def test_signup_duplicate_email_including_deleted(self, db_session):
+        """論理削除済みを含めてメールアドレス重複を拒否する"""
+        db_session.add(
+            UserModel(
+                email='duplicate@example.com',
+                password_hash='hashed_password',
+                deleted_at=TEST_NOW,
+            )
+        )
+        db_session.commit()
+
+        usecase = create_usecase(db_session)
+
+        with pytest.raises(AppError) as exc_info:
+            usecase.signup(
+                SignupInputDTO(email='duplicate@example.com', password='Passw0rd')
+            )
+
+        assert exc_info.value.status_code == 409
+        assert exc_info.value.code == 'DUPLICATE_NAME'
+
+    def test_signup_password_validation_error(self, db_session):
+        """パスワード要件違反を拒否する"""
+        usecase = create_usecase(db_session)
+
+        with pytest.raises(AppError) as exc_info:
+            usecase.signup(SignupInputDTO(email='user@example.com', password='short'))
+
+        assert exc_info.value.status_code == 422
+        assert exc_info.value.code == 'VALIDATION_ERROR'
+        assert exc_info.value.details['field'] == 'password'
+
+    def test_login_success(self, db_session):
         """ログイン成功のテスト"""
-        mock_security_service.create_access_token.return_value = 'test_token_12345'
+        usecase = create_usecase(db_session)
+        signup_result = usecase.signup(
+            SignupInputDTO(email='login@example.com', password='Passw0rd')
+        )
 
-        usecase = AuthUsecase(security_service=mock_security_service)
-        input_dto = LoginInputDTO(email='admin@example.com', password='pass')
+        result = usecase.login(
+            LoginInputDTO(email='login@example.com', password='Passw0rd')
+        )
 
-        result = usecase.login(input_dto)
-
-        assert isinstance(result, LoginOutputDTO)
-        assert result.user.id == 1
-        assert result.user.email == 'admin@example.com'
-        assert result.session_token == 'test_token_12345'
+        assert result.user.id == signup_result.user_id
+        assert result.user.email == 'login@example.com'
+        assert result.session_token
         assert result.session_expires_in_days == 30
-        assert result.message == 'ログインしました。'
 
-        mock_security_service.create_access_token.assert_called_once()
+    def test_login_failure_wrong_password(self, db_session):
+        """ログイン失敗のテスト"""
+        usecase = create_usecase(db_session)
+        usecase.signup(SignupInputDTO(email='login@example.com', password='Passw0rd'))
 
-    def test_login_failure_wrong_email(self, mock_security_service):
-        """ログイン失敗のテスト（間違ったメールアドレス）"""
-        usecase = AuthUsecase(security_service=mock_security_service)
-        input_dto = LoginInputDTO(email='wrong@example.com', password='pass')
-
-        with pytest.raises(HTTPException) as exc_info:
-            usecase.login(input_dto)
-
-        assert exc_info.value.status_code == 401
-        assert 'メールアドレスまたはパスワードが正しくありません' in exc_info.value.detail
-        mock_security_service.create_access_token.assert_not_called()
-
-    def test_login_failure_wrong_password(self, mock_security_service):
-        """ログイン失敗のテスト（間違ったパスワード）"""
-        usecase = AuthUsecase(security_service=mock_security_service)
-        input_dto = LoginInputDTO(email='admin@example.com', password='wrong_password')
-
-        with pytest.raises(HTTPException) as exc_info:
-            usecase.login(input_dto)
+        with pytest.raises(AppError) as exc_info:
+            usecase.login(
+                LoginInputDTO(email='login@example.com', password='wrong_password')
+            )
 
         assert exc_info.value.status_code == 401
-        assert 'メールアドレスまたはパスワードが正しくありません' in exc_info.value.detail
-        mock_security_service.create_access_token.assert_not_called()
+        assert exc_info.value.code == 'UNAUTHORIZED'
 
-    def test_logout(self, mock_security_service):
-        """ログアウトのテスト"""
-        usecase = AuthUsecase(security_service=mock_security_service)
+    def test_login_failure_deleted_user(self, db_session):
+        """論理削除済みユーザーはログインできない"""
+        password_service = PasswordHashServiceImpl()
+        db_session.add(
+            UserModel(
+                email='deleted@example.com',
+                password_hash=password_service.hash_password('Passw0rd'),
+                deleted_at=TEST_NOW,
+            )
+        )
+        db_session.commit()
 
-        result = usecase.logout()
+        usecase = create_usecase(db_session)
 
-        assert isinstance(result, LogoutOutputDTO)
+        with pytest.raises(AppError) as exc_info:
+            usecase.login(LoginInputDTO(email='deleted@example.com', password='Passw0rd'))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.code == 'UNAUTHORIZED'
+
+    def test_logout_revokes_current_session(self, db_session):
+        """ログアウトで current session を失効する"""
+        usecase = create_usecase(db_session)
+        usecase.signup(SignupInputDTO(email='logout@example.com', password='Passw0rd'))
+        login_result = usecase.login(
+            LoginInputDTO(email='logout@example.com', password='Passw0rd')
+        )
+        token_hash = SessionTokenServiceImpl().hash_token(login_result.session_token)
+
+        result = usecase.logout(token_hash)
+
         assert result.logged_out is True
-        assert result.message == 'ログアウトしました。'
 
-    def test_get_auth_status_authenticated(self, mock_security_service):
-        """認証済み状態取得のテスト"""
-        usecase = AuthUsecase(security_service=mock_security_service)
+        session_model = (
+            db_session.query(UserSessionModel)
+            .filter(UserSessionModel.session_token_hash == token_hash)
+            .first()
+        )
+        assert session_model is not None
+        assert session_model.revoked_at is not None
 
-        result = usecase.get_auth_status(user_id=123)
-
-        assert isinstance(result, StatusOutputDTO)
-        assert result.authenticated is True
-        assert result.user is not None
-        assert result.user.id == 123
-        assert result.user.email == 'admin@example.com'
-
-    def test_get_auth_status_unauthenticated(self, mock_security_service):
+    def test_get_auth_status_unauthenticated(self, db_session):
         """未認証状態取得のテスト"""
-        usecase = AuthUsecase(security_service=mock_security_service)
+        usecase = create_usecase(db_session)
 
-        result = usecase.get_auth_status(user_id=0)
+        result = usecase.get_auth_status(AuthSessionContextDTO())
 
-        assert isinstance(result, StatusOutputDTO)
         assert result.authenticated is False
         assert result.user is None
+
+    def test_get_auth_status_expired_raises_session_expired(self, db_session):
+        """期限切れセッションは SESSION_EXPIRED を返す"""
+        usecase = create_usecase(db_session)
+
+        with pytest.raises(AppError) as exc_info:
+            usecase.get_auth_status(AuthSessionContextDTO(expired=True))
+
+        assert exc_info.value.status_code == 401
+        assert exc_info.value.code == 'SESSION_EXPIRED'
+
+    def test_get_auth_status_refreshes_old_session(self, db_session):
+        """24時間以上経過したセッションは status で延長される"""
+        password_service = PasswordHashServiceImpl()
+        user_model = UserModel(
+            email='status@example.com',
+            password_hash=password_service.hash_password('Passw0rd'),
+        )
+        db_session.add(user_model)
+        db_session.commit()
+
+        session_model = UserSessionModel(
+            user_id=user_model.id,
+            session_token_hash='status-hash',
+            expires_at=TEST_NOW + timedelta(hours=1),
+            last_seen_at=TEST_NOW - timedelta(days=2),
+        )
+        db_session.add(session_model)
+        db_session.commit()
+
+        usecase = create_usecase(db_session)
+
+        result = usecase.get_auth_status(
+            AuthSessionContextDTO(
+                authenticated=True,
+                user_id=user_model.id,
+                session_id=session_model.id,
+                session_token_hash='status-hash',
+                last_seen_at=session_model.last_seen_at,
+                expires_at=session_model.expires_at,
+            )
+        )
+
+        assert result.authenticated is True
+        refreshed_session = (
+            db_session.query(UserSessionModel)
+            .filter(UserSessionModel.id == session_model.id)
+            .first()
+        )
+        assert refreshed_session is not None
+        assert refreshed_session.last_seen_at is not None
+        assert refreshed_session.last_seen_at > TEST_NOW - timedelta(days=1)

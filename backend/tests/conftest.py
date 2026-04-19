@@ -105,3 +105,28 @@ def test_client() -> Generator[TestClient, None, None]:
 
     # テスト後にキャッシュをクリア
     get_settings.cache_clear()
+
+
+@pytest.fixture(scope='function')
+def auth_test_client(db_session) -> Generator[TestClient, None, None]:
+    """認証有効状態の FastAPI TestClient"""
+    os.environ['ENABLE_AUTH'] = 'true'
+    _ensure_test_settings_env()
+
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    from app.infrastructure.db.session import get_db
+    from app.main import app
+
+    def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+    get_settings.cache_clear()
