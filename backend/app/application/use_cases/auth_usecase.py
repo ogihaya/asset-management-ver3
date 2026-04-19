@@ -1,15 +1,17 @@
 import logging
+from datetime import timedelta
 
-# from app.domain.repositories.user_repository import IUserRepository
 from fastapi import HTTPException, status
 
 from app.application.interfaces.security_service import ISecurityService
 from app.application.schemas.auth_schemas import (
+    AuthUserDTO,
     LoginInputDTO,
     LoginOutputDTO,
     LogoutOutputDTO,
     StatusOutputDTO,
 )
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,64 +22,44 @@ class AuthUsecase:
     def __init__(
         self,
         security_service: ISecurityService,
-        # user_repository: IUserRepository  # 将来のDB認証用
     ):
         self.security_service = security_service
-        # self.user_repository = user_repository
 
     def login(self, input_dto: LoginInputDTO) -> LoginOutputDTO:
         # ============================================================
-        # 【暫定実装】ハードコーディングでの認証
+        # 【暫定実装】Step 1-3 用の bridge 実装
         # ============================================================
-        if input_dto.login_id == 'admin' and input_dto.password == 'pass':
-            user_id = 1
-            access_token = self.security_service.create_access_token(user_id=user_id)
+        if input_dto.email == 'admin@example.com' and input_dto.password == 'pass':
+            settings = get_settings()
+            user = AuthUserDTO(id=1, email='admin@example.com')
+            session_token = self.security_service.create_access_token(
+                user_id=user.id,
+                expires_delta=timedelta(days=settings.session_expiration_days),
+            )
             logger.info('ログイン成功')
 
-            return LoginOutputDTO(access_token=access_token, user_id=user_id)
-        else:
-            # 認証失敗
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail='ログインIDまたはパスワードが正しくありません',
+            return LoginOutputDTO(
+                user=user,
+                session_token=session_token,
+                session_expires_in_days=settings.session_expiration_days,
+                message='ログインしました。',
             )
 
-        # ============================================================
-        # 【将来実装】DBを使用した認証（参考実装）
-        # ============================================================
-        # login_id = input_dto.login_id
-        # password = input_dto.password
-        #
-        # user_data = self.user_repository.get_by_login_id(login_id)
-        #
-        # if user_data is None:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_401_UNAUTHORIZED,
-        #         detail="ログインIDもしくはパスワードが違います。"
-        #     )
-        #
-        # is_authenticated = self.security_service.verify_password(
-        #     password, user_data.password
-        # )
-        # if not is_authenticated:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_401_UNAUTHORIZED,
-        #         detail="ログインIDもしくはパスワードが違います。"
-        #     )
-        #
-        # # logger.info("ログイン成功")
-        #
-        # access_token = self.security_service.create_access_token(user_id=user_data.id)
-        # return LoginOutputDTO(
-        #     access_token=access_token,
-        #     user_id=user_data.id
-        # )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail='メールアドレスまたはパスワードが正しくありません',
+        )
 
     def logout(self) -> LogoutOutputDTO:
         """ログアウト処理（Cookieはエンドポイント側で削除）"""
         logger.info('ログアウト成功')
-        return LogoutOutputDTO(message='ログアウトしました')
+        return LogoutOutputDTO(logged_out=True, message='ログアウトしました。')
 
     def get_auth_status(self, user_id: int) -> StatusOutputDTO:
         """認証状態を取得"""
-        return StatusOutputDTO(is_authenticated=True, user_id=user_id)
+        if user_id <= 0:
+            return StatusOutputDTO(authenticated=False, user=None)
+
+        return StatusOutputDTO(
+            authenticated=True, user=AuthUserDTO(id=user_id, email='admin@example.com')
+        )

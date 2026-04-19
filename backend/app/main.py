@@ -1,12 +1,13 @@
 import os
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.infrastructure.logging.logging import setup_logging
 from app.presentation.api.auth_api import router as auth_router
+from app.presentation.api.users_api import router as users_router
 
 # ロギングの設定を初期化
 setup_logging()
@@ -48,7 +49,10 @@ app.add_middleware(
 )
 
 # API ルーターをアプリケーションに含める
-app.include_router(auth_router)
+api_v1_router = APIRouter(prefix='/api/v1')
+api_v1_router.include_router(auth_router)
+api_v1_router.include_router(users_router)
+app.include_router(api_v1_router)
 
 
 # ヘルスチェックエンドポイント（ALB/ECS用）
