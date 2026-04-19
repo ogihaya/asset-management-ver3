@@ -75,7 +75,9 @@ class TestUsersAPI:
         assert data['error']['code'] == 'SESSION_EXPIRED'
         assert 'asset_management_session=' in response.headers['set-cookie']
 
-    def test_delete_me_success(self, auth_test_client: TestClient, db_session):
+    def test_delete_me_success(
+        self, auth_test_client: TestClient, db_session, fresh_db_session
+    ):
         """アカウント削除で論理削除と全セッション失効を行う"""
         auth_test_client.post(
             '/api/v1/auth/signup',
@@ -112,19 +114,27 @@ class TestUsersAPI:
         assert data['data']['deleted'] is True
         assert data['meta']['message'] == 'アカウントを削除しました。'
 
-        db_session.refresh(user_model)
-        assert user_model.deleted_at is not None
+        verify_session = fresh_db_session()
+        deleted_user = (
+            verify_session.query(UserModel).filter(UserModel.id == user_model.id).first()
+        )
+        assert deleted_user is not None
+        assert deleted_user.deleted_at is not None
 
         first_session = (
-            db_session.query(UserSessionModel)
+            verify_session.query(UserSessionModel)
             .filter(UserSessionModel.session_token_hash == token_hash)
             .first()
         )
         assert first_session is not None
-        db_session.refresh(first_session)
-        db_session.refresh(second_session)
         assert first_session.revoked_at is not None
-        assert second_session.revoked_at is not None
+        refreshed_second_session = (
+            verify_session.query(UserSessionModel)
+            .filter(UserSessionModel.id == second_session.id)
+            .first()
+        )
+        assert refreshed_second_session is not None
+        assert refreshed_second_session.revoked_at is not None
         assert 'asset_management_session=' in response.headers['set-cookie']
 
         auth_test_client.cookies.set(

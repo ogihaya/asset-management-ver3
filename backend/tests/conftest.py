@@ -59,15 +59,49 @@ def test_db_engine():
 
 
 @pytest.fixture(scope='function')
-def db_session(test_db_engine) -> Generator[Session, None, None]:
+def clean_database(test_db_engine) -> Generator[None, None, None]:
+    """各テスト前後でテーブル内容を初期化する"""
+    with test_db_engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+    yield
+
+    with test_db_engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+
+@pytest.fixture(scope='function')
+def session_factory(clean_database, test_db_engine):
+    """テスト用セッションファクトリ"""
+    return sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+
+
+@pytest.fixture(scope='function')
+def db_session(session_factory) -> Generator[Session, None, None]:
     """テスト用DBセッション（各テストで独立）"""
-    TestingSessionLocal = sessionmaker(
-        autocommit=False, autoflush=False, bind=test_db_engine
-    )
-    session = TestingSessionLocal()
+    session = session_factory()
     try:
         yield session
     finally:
+        session.rollback()
+        session.close()
+
+
+@pytest.fixture(scope='function')
+def fresh_db_session(session_factory):
+    """必要なタイミングで新しいDBセッションを作る"""
+    sessions: list[Session] = []
+
+    def _create() -> Session:
+        session = session_factory()
+        sessions.append(session)
+        return session
+
+    yield _create
+
+    for session in reversed(sessions):
         session.rollback()
         session.close()
 
@@ -108,7 +142,7 @@ def test_client() -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture(scope='function')
-def auth_test_client(db_session) -> Generator[TestClient, None, None]:
+def auth_test_client(session_factory) -> Generator[TestClient, None, None]:
     """認証有効状態の FastAPI TestClient"""
     os.environ['ENABLE_AUTH'] = 'true'
     _ensure_test_settings_env()
@@ -121,7 +155,15 @@ def auth_test_client(db_session) -> Generator[TestClient, None, None]:
     from app.main import app
 
     def override_get_db():
-        yield db_session
+        session = session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
     app.dependency_overrides[get_db] = override_get_db
 

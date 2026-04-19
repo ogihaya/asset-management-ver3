@@ -5,13 +5,14 @@ from datetime import UTC, datetime, timedelta
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from app.infrastructure.db.models.user_model import UserModel
 from app.infrastructure.db.models.user_session_model import UserSessionModel
 from app.infrastructure.security.session_token_service_impl import SessionTokenServiceImpl
 
 class TestAuthAPI:
     """Auth APIエンドポイントのテストクラス"""
 
-    def test_signup_success(self, auth_test_client: TestClient):
+    def test_signup_success(self, auth_test_client: TestClient, fresh_db_session):
         """サインアップ成功のテスト"""
         response = auth_test_client.post(
             '/api/v1/auth/signup',
@@ -23,6 +24,14 @@ class TestAuthAPI:
         assert data['data']['user_id'] > 0
         assert data['data']['email'] == 'user@example.com'
         assert data['meta']['message'] == 'ユーザー登録が完了しました。'
+
+        verify_session = fresh_db_session()
+        persisted_user = (
+            verify_session.query(UserModel)
+            .filter(UserModel.email == 'user@example.com')
+            .first()
+        )
+        assert persisted_user is not None
 
     def test_signup_duplicate_email(self, auth_test_client: TestClient):
         """重複メールアドレスは拒否する"""
@@ -53,7 +62,7 @@ class TestAuthAPI:
         assert data['error']['code'] == 'VALIDATION_ERROR'
         assert data['error']['details']['field'] == 'password'
 
-    def test_login_success(self, auth_test_client: TestClient):
+    def test_login_success(self, auth_test_client: TestClient, fresh_db_session):
         """ログイン成功のテスト"""
         auth_test_client.post(
             '/api/v1/auth/signup',
@@ -74,6 +83,18 @@ class TestAuthAPI:
 
         assert 'asset_management_session' in response.cookies
         assert 'access_token' not in response.cookies
+
+        token_hash = SessionTokenServiceImpl().hash_token(
+            response.cookies['asset_management_session']
+        )
+        verify_session = fresh_db_session()
+        persisted_session = (
+            verify_session.query(UserSessionModel)
+            .filter(UserSessionModel.session_token_hash == token_hash)
+            .first()
+        )
+        assert persisted_session is not None
+        assert persisted_session.revoked_at is None
 
     def test_login_failure_wrong_credentials(self, auth_test_client: TestClient):
         """ログイン失敗のテスト"""
@@ -121,6 +142,54 @@ class TestAuthAPI:
         assert data['data']['authenticated'] is True
         assert data['data']['user']['email'] == 'status@example.com'
 
+    def test_status_refresh_persists_session_update(
+        self, auth_test_client: TestClient, db_session, fresh_db_session
+    ):
+        """status の refresh が別セッションからも確認できる"""
+        auth_test_client.post(
+            '/api/v1/auth/signup',
+            json={'email': 'refresh@example.com', 'password': 'Passw0rd'},
+        )
+        login_response = auth_test_client.post(
+            '/api/v1/auth/login',
+            json={'email': 'refresh@example.com', 'password': 'Passw0rd'},
+        )
+        raw_token = login_response.cookies['asset_management_session']
+        token_hash = SessionTokenServiceImpl().hash_token(raw_token)
+
+        session_model = (
+            db_session.query(UserSessionModel)
+            .filter(UserSessionModel.session_token_hash == token_hash)
+            .first()
+        )
+        assert session_model is not None
+        old_last_seen_at = datetime.now(UTC) - timedelta(days=2)
+        old_expires_at = datetime.now(UTC) + timedelta(hours=1)
+        session_model.last_seen_at = old_last_seen_at
+        session_model.expires_at = old_expires_at
+        db_session.commit()
+
+        auth_test_client.cookies.set(
+            'asset_management_session',
+            raw_token,
+            domain='testserver',
+            path='/',
+        )
+        response = auth_test_client.get('/api/v1/auth/status')
+
+        assert response.status_code == status.HTTP_200_OK
+
+        verify_session = fresh_db_session()
+        refreshed_session = (
+            verify_session.query(UserSessionModel)
+            .filter(UserSessionModel.session_token_hash == token_hash)
+            .first()
+        )
+        assert refreshed_session is not None
+        assert refreshed_session.last_seen_at is not None
+        assert refreshed_session.last_seen_at > old_last_seen_at
+        assert refreshed_session.expires_at > old_expires_at
+
     def test_status_expired_session_returns_session_expired(
         self, auth_test_client: TestClient, db_session
     ):
@@ -157,7 +226,7 @@ class TestAuthAPI:
         assert 'asset_management_session=' in set_cookie_header
 
     def test_logout_success_revokes_current_session(
-        self, auth_test_client: TestClient, db_session
+        self, auth_test_client: TestClient, fresh_db_session
     ):
         """ログアウトで current session を失効する"""
         auth_test_client.post(
@@ -184,8 +253,9 @@ class TestAuthAPI:
         assert data['data']['logged_out'] is True
         assert data['meta']['message'] == 'ログアウトしました。'
 
+        verify_session = fresh_db_session()
         session_model = (
-            db_session.query(UserSessionModel)
+            verify_session.query(UserSessionModel)
             .filter(UserSessionModel.session_token_hash == token_hash)
             .first()
         )
