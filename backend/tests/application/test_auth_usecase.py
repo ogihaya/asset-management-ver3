@@ -5,7 +5,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.application.errors import AppError
-from app.application.schemas.auth_schemas import AuthSessionContextDTO, LoginInputDTO, SignupInputDTO
+from app.application.schemas.auth_schemas import (
+    AuthSessionContextDTO,
+    AuthSessionPolicyDTO,
+    LoginInputDTO,
+    SignupInputDTO,
+)
 from app.application.use_cases.auth_usecase import AuthUsecase
 from app.infrastructure.db.models.user_model import UserModel
 from app.infrastructure.db.models.user_session_model import UserSessionModel
@@ -17,6 +22,13 @@ from app.infrastructure.security.password_hash_service_impl import PasswordHashS
 from app.infrastructure.security.session_token_service_impl import SessionTokenServiceImpl
 
 TEST_NOW = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+TEST_POLICY = AuthSessionPolicyDTO(
+    cookie_name='asset_management_session',
+    session_expiration_days=30,
+    session_refresh_interval_hours=24,
+    secure_cookie=False,
+    enable_auth=True,
+)
 
 
 def create_usecase(db_session) -> AuthUsecase:
@@ -25,6 +37,7 @@ def create_usecase(db_session) -> AuthUsecase:
         user_session_repository=UserSessionRepositoryImpl(db_session),
         password_hash_service=PasswordHashServiceImpl(),
         session_token_service=SessionTokenServiceImpl(),
+        auth_session_policy=TEST_POLICY,
     )
 
 
