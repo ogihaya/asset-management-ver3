@@ -123,6 +123,8 @@ def mock_security_service() -> MagicMock:
 @pytest.fixture(scope='module')
 def test_client() -> Generator[TestClient, None, None]:
     """FastAPI TestClient"""
+    previous_enable_auth = os.environ.get('ENABLE_AUTH')
+
     # テスト用に認証を無効化
     os.environ['ENABLE_AUTH'] = 'false'
     _ensure_test_settings_env()
@@ -137,6 +139,11 @@ def test_client() -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
 
+    if previous_enable_auth is None:
+        os.environ.pop('ENABLE_AUTH', None)
+    else:
+        os.environ['ENABLE_AUTH'] = previous_enable_auth
+
     # テスト後にキャッシュをクリア
     get_settings.cache_clear()
 
@@ -144,7 +151,13 @@ def test_client() -> Generator[TestClient, None, None]:
 @pytest.fixture(scope='function')
 def auth_test_client(session_factory) -> Generator[TestClient, None, None]:
     """認証有効状態の FastAPI TestClient"""
+    previous_enable_auth = os.environ.get('ENABLE_AUTH')
+    previous_stage = os.environ.get('STAGE')
+
     os.environ['ENABLE_AUTH'] = 'true'
+    # 認証系テストは HTTP の TestClient を使うため、Secure Cookie を無効にしたい。
+    # CI では親環境が STAGE=test でも、この fixture 内だけ development に固定する。
+    os.environ['STAGE'] = 'development'
     _ensure_test_settings_env()
 
     from app.config import get_settings
@@ -171,4 +184,15 @@ def auth_test_client(session_factory) -> Generator[TestClient, None, None]:
         yield client
 
     app.dependency_overrides.clear()
+
+    if previous_enable_auth is None:
+        os.environ.pop('ENABLE_AUTH', None)
+    else:
+        os.environ['ENABLE_AUTH'] = previous_enable_auth
+
+    if previous_stage is None:
+        os.environ.pop('STAGE', None)
+    else:
+        os.environ['STAGE'] = previous_stage
+
     get_settings.cache_clear()
