@@ -179,6 +179,7 @@ class TestAuthUsecase:
 
     def test_get_auth_status_refreshes_old_session(self, db_session):
         """24時間以上経過したセッションは status で延長される"""
+        current_now = datetime.now(UTC)
         password_service = PasswordHashServiceImpl()
         user_model = UserModel(
             email='status@example.com',
@@ -190,11 +191,21 @@ class TestAuthUsecase:
         session_model = UserSessionModel(
             user_id=user_model.id,
             session_token_hash='status-hash',
-            expires_at=TEST_NOW + timedelta(hours=1),
-            last_seen_at=TEST_NOW - timedelta(days=2),
+            expires_at=current_now + timedelta(hours=1),
+            last_seen_at=current_now - timedelta(days=2),
         )
         db_session.add(session_model)
         db_session.commit()
+
+        context_last_seen_at = session_model.last_seen_at
+        assert context_last_seen_at is not None
+        if context_last_seen_at.tzinfo is None:
+            context_last_seen_at = context_last_seen_at.replace(tzinfo=UTC)
+
+        context_expires_at = session_model.expires_at
+        assert context_expires_at is not None
+        if context_expires_at.tzinfo is None:
+            context_expires_at = context_expires_at.replace(tzinfo=UTC)
 
         usecase = create_usecase(db_session)
 
@@ -204,8 +215,8 @@ class TestAuthUsecase:
                 user_id=user_model.id,
                 session_id=session_model.id,
                 session_token_hash='status-hash',
-                last_seen_at=session_model.last_seen_at,
-                expires_at=session_model.expires_at,
+                last_seen_at=context_last_seen_at,
+                expires_at=context_expires_at,
             )
         )
 
@@ -216,5 +227,8 @@ class TestAuthUsecase:
             .first()
         )
         assert refreshed_session is not None
-        assert refreshed_session.last_seen_at is not None
-        assert refreshed_session.last_seen_at > TEST_NOW - timedelta(days=1)
+        refreshed_last_seen_at = refreshed_session.last_seen_at
+        assert refreshed_last_seen_at is not None
+        if refreshed_last_seen_at.tzinfo is None:
+            refreshed_last_seen_at = refreshed_last_seen_at.replace(tzinfo=UTC)
+        assert refreshed_last_seen_at > current_now - timedelta(days=1)

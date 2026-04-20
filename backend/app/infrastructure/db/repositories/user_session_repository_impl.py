@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -116,8 +116,14 @@ class UserSessionRepositoryImpl(IUserSessionRepository):
             id=session_model.id,
             user_id=session_model.user_id,
             session_token_hash=session_model.session_token_hash,
-            expires_at=session_model.expires_at,
-            revoked_at=session_model.revoked_at,
-            last_seen_at=session_model.last_seen_at,
-            created_at=session_model.created_at,
+            expires_at=self._normalize_utc(session_model.expires_at),
+            revoked_at=self._normalize_utc(session_model.revoked_at),
+            last_seen_at=self._normalize_utc(session_model.last_seen_at),
+            created_at=self._normalize_utc(session_model.created_at),
         )
+
+    def _normalize_utc(self, value: datetime | None) -> datetime | None:
+        """SQLite などで naive に返る日時を UTC aware に正規化する"""
+        if value is None or value.tzinfo is not None:
+            return value
+        return value.replace(tzinfo=UTC)
