@@ -38,6 +38,23 @@ class UserRepositoryImpl(IUserRepository):
             return None
         return self._to_entity(user_model)
 
+    def get_by_email_including_deleted(self, email: str) -> User | None:
+        """
+        論理削除済みを含めてメールアドレスでユーザーを取得
+
+        Args:
+            email: メールアドレス
+
+        Returns:
+            Optional[User]: ユーザーエンティティ（存在しない場合はNone）
+        """
+        user_model = (
+            self.session.query(UserModel).filter(UserModel.email == email).first()
+        )
+        if user_model is None:
+            return None
+        return self._to_entity(user_model)
+
     def get_by_id(self, user_id: int) -> User | None:
         """
         IDでユーザーを取得

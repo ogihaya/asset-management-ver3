@@ -59,15 +59,49 @@ def test_db_engine():
 
 
 @pytest.fixture(scope='function')
-def db_session(test_db_engine) -> Generator[Session, None, None]:
+def clean_database(test_db_engine) -> Generator[None, None, None]:
+    """各テスト前後でテーブル内容を初期化する"""
+    with test_db_engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+    yield
+
+    with test_db_engine.begin() as connection:
+        for table in reversed(Base.metadata.sorted_tables):
+            connection.execute(table.delete())
+
+
+@pytest.fixture(scope='function')
+def session_factory(clean_database, test_db_engine):
+    """テスト用セッションファクトリ"""
+    return sessionmaker(autocommit=False, autoflush=False, bind=test_db_engine)
+
+
+@pytest.fixture(scope='function')
+def db_session(session_factory) -> Generator[Session, None, None]:
     """テスト用DBセッション（各テストで独立）"""
-    TestingSessionLocal = sessionmaker(
-        autocommit=False, autoflush=False, bind=test_db_engine
-    )
-    session = TestingSessionLocal()
+    session = session_factory()
     try:
         yield session
     finally:
+        session.rollback()
+        session.close()
+
+
+@pytest.fixture(scope='function')
+def fresh_db_session(session_factory):
+    """必要なタイミングで新しいDBセッションを作る"""
+    sessions: list[Session] = []
+
+    def _create() -> Session:
+        session = session_factory()
+        sessions.append(session)
+        return session
+
+    yield _create
+
+    for session in reversed(sessions):
         session.rollback()
         session.close()
 
@@ -89,6 +123,8 @@ def mock_security_service() -> MagicMock:
 @pytest.fixture(scope='module')
 def test_client() -> Generator[TestClient, None, None]:
     """FastAPI TestClient"""
+    previous_enable_auth = os.environ.get('ENABLE_AUTH')
+
     # テスト用に認証を無効化
     os.environ['ENABLE_AUTH'] = 'false'
     _ensure_test_settings_env()
@@ -103,5 +139,60 @@ def test_client() -> Generator[TestClient, None, None]:
     with TestClient(app) as client:
         yield client
 
+    if previous_enable_auth is None:
+        os.environ.pop('ENABLE_AUTH', None)
+    else:
+        os.environ['ENABLE_AUTH'] = previous_enable_auth
+
     # テスト後にキャッシュをクリア
+    get_settings.cache_clear()
+
+
+@pytest.fixture(scope='function')
+def auth_test_client(session_factory) -> Generator[TestClient, None, None]:
+    """認証有効状態の FastAPI TestClient"""
+    previous_enable_auth = os.environ.get('ENABLE_AUTH')
+    previous_stage = os.environ.get('STAGE')
+
+    os.environ['ENABLE_AUTH'] = 'true'
+    # 認証系テストは HTTP の TestClient を使うため、Secure Cookie を無効にしたい。
+    # CI では親環境が STAGE=test でも、この fixture 内だけ development に固定する。
+    os.environ['STAGE'] = 'development'
+    _ensure_test_settings_env()
+
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    from app.infrastructure.db.session import get_db
+    from app.main import app
+
+    def override_get_db():
+        session = session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+
+    with TestClient(app) as client:
+        yield client
+
+    app.dependency_overrides.clear()
+
+    if previous_enable_auth is None:
+        os.environ.pop('ENABLE_AUTH', None)
+    else:
+        os.environ['ENABLE_AUTH'] = previous_enable_auth
+
+    if previous_stage is None:
+        os.environ.pop('STAGE', None)
+    else:
+        os.environ['STAGE'] = previous_stage
+
     get_settings.cache_clear()

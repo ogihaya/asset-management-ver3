@@ -8,6 +8,11 @@ class IUserSessionRepository(ABC):
     """ユーザーセッションリポジトリのインターフェース"""
 
     @abstractmethod
+    def find_by_token_hash(self, session_token_hash: str) -> UserSession | None:
+        """トークンハッシュでユーザーセッションを取得"""
+        pass
+
+    @abstractmethod
     def create(self, session: UserSession) -> UserSession:
         """ユーザーセッションを作成"""
         pass

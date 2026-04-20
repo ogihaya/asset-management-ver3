@@ -7,6 +7,19 @@ class IUserRepository(ABC):
     """ユーザーリポジトリのインターフェース"""
 
     @abstractmethod
+    def get_by_email_including_deleted(self, email: str) -> User | None:
+        """
+        論理削除済みを含めてメールアドレスでユーザーを取得
+
+        Args:
+            email: メールアドレス
+
+        Returns:
+            Optional[User]: ユーザーエンティティ（存在しない場合はNone）
+        """
+        pass
+
+    @abstractmethod
     def get_by_email(self, email: str) -> User | None:
         """
         メールアドレスでユーザーを取得

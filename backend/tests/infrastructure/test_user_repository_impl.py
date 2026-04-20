@@ -41,6 +41,28 @@ class TestUserRepositoryImpl:
         user = repository.get_by_email('non_existing@example.com')
         assert user is None
 
+    def test_get_by_email_including_deleted_returns_deleted_user(self, db_session):
+        """論理削除済みユーザーもメールアドレスで取得できる"""
+        from datetime import UTC, datetime
+
+        from app.infrastructure.db.models.user_model import UserModel
+
+        deleted_at = datetime(2026, 4, 19, 12, 0, tzinfo=UTC)
+        user_model = UserModel(
+            email='deleted-repo@example.com',
+            password_hash=TEST_PASSWORD_HASH,
+            deleted_at=deleted_at,
+        )
+        db_session.add(user_model)
+        db_session.commit()
+
+        repository = UserRepositoryImpl(session=db_session)
+        user = repository.get_by_email_including_deleted('deleted-repo@example.com')
+
+        assert user is not None
+        assert user.email == 'deleted-repo@example.com'
+        assert user.deleted_at == deleted_at
+
     def test_get_by_id_existing_user(self, db_session):
         """既存ユーザーをIDで取得"""
         from app.infrastructure.db.models.user_model import UserModel
